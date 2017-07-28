@@ -18,14 +18,15 @@
 #
 #
 
-import sys, os
+import sys
+import os
 import datetime
 import argparse
 import configparser
 import sqlite3
 import psycopg2
 
-__version__ = "1.0.1"
+__version__ = "1.0.2"
 __doc__ = "This program is checking if all the linked or grouped items in a Daminion catalog have same tags."
 
 #   Version history
@@ -52,13 +53,14 @@ __doc__ = "This program is checking if all the linked or grouped items in a Dami
 #           – added possibility to exclude branches in exclude file
 #           - added option -y/--only as an opposite to -x
 #   1.0.1   – refactoring
+#   1.0.2   – refactoring
 
 VerboseOutput = 0
 imagefiletypekey = ["%7jnbapuim4$lwk:d45bb3b6-b441-435c-a3ec-b27d067b7c53",
                     "%7jnbapuim4$lwk:343f9214-79a7-4b58-96a3-b7838e3e37ee"]  # magic keys from database
 
 
-class ExcludeTags(configparser.ConfigParser):
+class FilterTags(configparser.ConfigParser):
 
     def _has_option(self, section, option):
         if option == '':
@@ -68,7 +70,7 @@ class ExcludeTags(configparser.ConfigParser):
         opt = ""
         for o in o_part:
             opt += o
-            if configparser.ConfigParser.has_option(self,section,opt):
+            if configparser.ConfigParser.has_option(self, section, opt):
                 return True
             opt += '|'
         return False
@@ -76,16 +78,28 @@ class ExcludeTags(configparser.ConfigParser):
     def _has_no_option(self, section, option):
         return not self._has_option(section, option)
 
-    def __init__(self, excludefile, include=False):
+    def __init__(self, filterfile, include=False):
         configparser.ConfigParser.__init__(self, allow_no_value=True)
         self.optionxform = str
-        if excludefile is not None:
-            if self.read(excludefile, encoding='utf-8') == []:
-                sys.stderr.write("Tag filter file" + excludefile + "doesn't exist. List ignored.\n")
-        if include:
-            self.has_option = self._has_no_option
-        else:
-            self.has_option = self._has_option
+        self.has_option = self._has_option
+        if filterfile is not None:
+            if self.read(filterfile, encoding='utf-8') == []:
+                sys.stderr.write("File " + filterfile + " specified with -x|-y doesn't exist. Option ignored.\n")
+            if include:
+                self.has_option = self._has_no_option
+
+#       For verbose print the filter list
+        if VerboseOutput > 0:
+            line = "Tags that are"
+            if include:
+                line += " not"
+            line += " filtered are:"
+            print(line)
+            for s in self.sections():
+                print("[{}]".format(s))
+                for o in self.options(s):
+                    print(o)
+            print("")
 
 
 class DamImage:
@@ -132,9 +146,6 @@ class DamImage:
 
         self._ImageName = row[0]
         self._ImagePath = row[1]
-#        parts = self.ImageName.split('.')
-#        filetype = parts[len(parts)-1].lower()
-#        self.IsImage = filetype in imagefiletypes
 
         # get Event and Media format (id)
         cur.execute("SELECT id_event, id_mediaformat, deleted FROM mediaitems WHERE id=" + str(img_id))
@@ -206,6 +217,11 @@ class DamImage:
                 name = tmp
         return name
 
+    #  Ignore deleted entries and items that are not images
+    @property
+    def isvalid(self):
+        return not self.IsDeleted and self.IsImage
+
     def __repr__(self):
         return self.ImageName
 
@@ -218,7 +234,7 @@ class DamImage:
         row = cur.fetchall()
         for r in row:
             img = DamImage(self.__db, r[0])
-            if not img.IsDeleted and img.IsImage:
+            if img.isvalid:
                 tmp_list.append(img)
         cur.close()
         return tmp_list
@@ -232,7 +248,7 @@ class DamImage:
             return []
         else:
             img = DamImage(self.__db, row[0])
-            if not img.IsDeleted and img.IsImage:
+            if img.isvalid:
                 return [img]
             else:
                 return []
@@ -246,7 +262,7 @@ class DamImage:
         for r in rows:
             if r[0] != self.__id:
                 img = DamImage(self.__db, r[0])
-                if not img.IsDeleted and img.IsImage:
+                if img.isvalid:
                     tmp_list.append(img)
         return tmp_list
 
@@ -266,10 +282,10 @@ class DamImage:
         tags = getattr(self, tag)
         return tags
 
-    def SameSingleValueTag(self, other, tagcat, exc):
+    def SameSingleValueTag(self, other, tagcat, filter_list):
         mytag = self.GetTags(tagcat)
         othertag = other.GetTags(tagcat)
-        if exc.has_option(tagcat, mytag) or exc.has_option(tagcat, othertag):
+        if filter_list.has_option(tagcat, mytag) or filter_list.has_option(tagcat, othertag):
             return
 
         line = self.ImageName + "\t<>\t" + other.ImageName + "\t" + tagcat
@@ -279,13 +295,13 @@ class DamImage:
         if orig_len < len(line):
             self.__db.outfile.write(line + "\n")
 
-    def SameMultiValueTags(self, d, other, tagcat, exc):
+    def SameMultiValueTags(self, d, other, tagcat, filter_list):
         mytags = self.GetTags(tagcat)
         othertags = other.GetTags(tagcat)
         line = self.ImageName + "\t" + d + "\t" + other.ImageName + "\t" + tagcat + "\t"
         orig_len = len(line)
         for tagvalue in othertags:
-            if tagvalue not in mytags and not exc.has_option(tagcat, tagvalue) and tagvalue != "":
+            if tagvalue not in mytags and not filter_list.has_option(tagcat, tagvalue) and tagvalue != "":
                 if len(line) > orig_len:
                     line += ", "
                 line += "'" + tagvalue + "'"
@@ -294,7 +310,6 @@ class DamImage:
 
 
 class DamCatalog:
-#   _damTags = ["Event", "Place", "GPS", "People", "Keywords", "Categories"]
     EventList = {}
     PlaceList = {}
     PeopleList = {}
@@ -333,7 +348,7 @@ class DamCatalog:
             while rows[j][1] != 0:
                 j = tmp_idx[rows[j][1]]
                 temp = rows[j][2] + "|" + temp
-            getattr(self,listname)[rows[i][0]] = temp
+            getattr(self, listname)[rows[i][0]] = temp
         cur.close()
 
     def _initEventList(self):
@@ -362,12 +377,13 @@ class DamCatalog:
         self.catalog = None
         self.__dbname = name
         self.__counter = 0
+
         try:
             if sqlite:
                 if os.path.isfile(name):
                     self.catalog = sqlite3.connect(name)
                 else:
-                    print(name, "is not a valid database file")
+                    sys.stderr.write(name + " is not a valid database file\n")
                     sys.exit(-1)
             else:
                 self.catalog = psycopg2.connect(host=host, port=port, database=name,
@@ -384,64 +400,69 @@ class DamCatalog:
         self._initKeywordList()
         self._initCategoryList()
 
-        if VerboseOutput:
+        if VerboseOutput > 0:
             print("Database", self.__dbname, "opened and datastructures initialized.")
 
     def __del__(self):
         if self.catalog is not None:
-            self.__scan.close()
             self.catalog.close()
 
     def __repr__(self):
         return "{}".format(self.__dbname)
 
-    def InitSearch(self):
-        self.__scan = self.catalog.cursor()
-        self.__scan.execute("SELECT id, filename, deleted FROM mediaitems")
-        if VerboseOutput > 0:
-            count = self.__scan.rowcount
-            if count > 0:
-                print("Number of files: ", count)
+    def set_params(self, group, basename, fullpath, id, outfile):
+        self.useGroup = group
+        self.FullPath = fullpath
+        self.PrintID = id
+        self.outfile = outfile
+        self.CheckName = basename
 
     def NextImage(self):
-        row = self.__scan.fetchone()    #  id, filename, deleted
-        while row is not None and row[2]:
-            row = self.__scan.fetchone()
-        if row is not None:
-            self.__counter += 1
-            if VerboseOutput > 0:
-                print("\r", "{:7} {:7}: {:60}".format(self.__counter, row[0], row[1]), end="", flush=True)
-            self.__image = DamImage(self, row[0])
-            return True
-        else:
-            return False
+        curs = self.catalog.cursor()
+        curs.execute("SELECT id, filename, deleted FROM mediaitems")
+#        if VerboseOutput > 0:
+#            count = curs.rowcount
+#            if count > 0:
+#                print("Number of files: ", count)
+
+        row = curs.fetchone()    # id, filename, deleted
+        while row is not None:
+            if not bool(row[2]):
+                self.__counter += 1
+                if VerboseOutput > 0:
+                    print("\r", "{:7} {:7}: {:60}".format(self.__counter, row[0], row[1]), end="", flush=True)
+                yield DamImage(self, row[0])
+            row = curs.fetchone()
+
+        curs.close()
+        raise StopIteration
 
     def ScanCatalog(self, taglist, exclude):
-        self.InitSearch()
         self.outfile.write("ImageA\tDir\tImageB\tTag\tValueA/Missing A\t\tValueB\n")
-        while self.NextImage():
-            if not self.__image.IsImage or self.__image.IsDeleted:
+        for curr_img in self.NextImage():
+            if not curr_img.isvalid:
                 continue
-            ToList = self.__image.LinkedTo()
-            FromList = self.__image.LinkedFrom()
-            if VerboseOutput > 1 and (ToList != [] or FromList != []):
+            ToList = curr_img.LinkedTo()
+            FromList = curr_img.LinkedFrom()
+            if ToList == [] and FromList == []:
+                continue
+            if VerboseOutput > 1:
                 print("")
-                print("{}\t{}\t{}".format(FromList, self.__image, ToList))
+                print("{}\t{}\t{}".format(FromList, curr_img, ToList))
             if self.CheckName is not None:
-                for list in ToList, FromList:
-                    for f in list:
-                        if self.__image.basename != f.basename:
-                            self.outfile.write(self.__image.ImageName + "\t<>\t" + f.ImageName + "\n")
+                for lst in ToList, FromList:
+                    for f in lst:
+                        if curr_img.basename != f.basename:
+                            self.outfile.write(curr_img.ImageName + "\t<>\t" + f.ImageName + "\n")
             for tag in taglist:
-                if tag in ["Event", "Place", "GPS"]:    #  single value tags
+                if tag in ["Event", "Place", "GPS"]:    # single value tags
                     for img in ToList:
-                        self.__image.SameSingleValueTag(img, tag, exclude)
-                else:                                   #  multi value tags
+                        curr_img.SameSingleValueTag(img, tag, exclude)
+                else:                                   # multi value tags
                     for img in ToList:
-                        self.__image.SameMultiValueTags(">", img, tag, exclude)
+                        curr_img.SameMultiValueTags(">", img, tag, exclude)
                     for img in FromList:
-                        self.__image.SameMultiValueTags("<", img, tag, exclude)
-        return
+                        curr_img.SameMultiValueTags("<", img, tag, exclude)
 
 
 def main():
@@ -464,17 +485,12 @@ def main():
                         help="Print database id after the filename")
     parser.add_argument("-t", "--tags", dest="taglist", nargs='*', default=alltags, choices=alltags,
                         help="Tag categories to be checked [all]. "
-                        "Allowed values for taglist are Event, Place, GPS, People, Keywords and Categories. "
-                        "Specifying -t without any categories is useful with -b to check only file names.")
+                        "Allowed values for taglist are Event, Place, GPS, People, Keywords and Categories.")
     group = parser.add_mutually_exclusive_group()
     group.add_argument("-x", "--exclude", dest="exfile",
-                        help="Configuration file for tag values that are excluded from comparison. "
-                        "The file format is like standard INI file: [Tag category], followed by a list of tag values "
-                        "one value on each line. Specify the hierarchy with \'|\' as separator (like Lintula|Juha)")
+                        help="Configuration file for tag values that are excluded from comparison.")
     group.add_argument("-y", "--only", dest="onlyfile",
-                        help="Configuration file for tag values that are only used for comparison. "
-                        "The file format is like standard INI file: [Tag category], followed by a list of tag values "
-                        "one value on each line. Specify the hierarchy with \'|\' as separator (like Lintula|Juha)")
+                        help="Configuration file for tag values that are only used for comparison.")
     parser.add_argument("-v", "--verbose", action="count", dest="verbose", default=0,
                         help="verbose output (always into stdout)")
     parser.add_argument("-b", "--basename", dest="basename", nargs='*', metavar="SEPARATOR",
@@ -492,7 +508,7 @@ def main():
     parser.add_argument("-u", "--user", dest="user", default="postgres/postgres",
                         help="Postgres user/password [postgres/postgres]")
     parser.add_argument("-o", "--output", dest="outfile", type=argparse.FileType('w', encoding='utf-8'),
-                        default=sys.stdout, help= "Output file for report [stdout]")
+                        default=sys.stdout, help="Output file for report [stdout]")
     parser.add_argument("--version",
                         action="store_true", dest="version", default=False,
                         help="Display version information and exit.")
@@ -503,36 +519,29 @@ def main():
     if args.version or VerboseOutput > 0:
         print(__doc__)
         print('*** Version', __version__, '***')
-        print('Scan started at {:%H:%M:%S}'.format(datetime.datetime.now()))
-        if args.version:
+        if not args.version:
+            print('Scan started at {:%H:%M:%S}'.format(datetime.datetime.now()))
+        else:
             sys.exit(0)
-
-#    exclude = configparser.ConfigParser(allow_no_value=True)
-#    exclude.optionxform = str
-#    if args.exfile is not None:
-#        if exclude.read(args.exfile, encoding='UTF-8')[0] != args.exfile:
-#            print("Exclude file", args.exfile, "doesn't exist. Exclude list ignored.")
 
     user = args.user.split('/')[0]
     password = args.user.split('/')[1]
     catalog = DamCatalog(args.server, args.port, args.dbname, user, password, args.sqlite)
-    catalog.useGroup = args.group
-    catalog.FullPath = args.fullpath
-    catalog.PrintID = args.id
-    catalog.outfile = args.outfile
-    catalog.CheckName = args.basename
+    catalog.set_params(args.group, args.basename, args.fullpath, args.id, args.outfile)
 
+    # document the call parameters in the output file
     line = sys.argv[0]
     for s in sys.argv[1:]:
         line += ' ' + s
     line += '\n'
-    catalog.outfile.write(line)
+    args.outfile.write(line)
+
     if args.onlyfile is None:
         file = args.exfile
     else:
         file = args.onlyfile
-    exclude = ExcludeTags(file, args.onlyfile == file)
-    catalog.ScanCatalog(args.taglist, exclude)
+    filter_list = FilterTags(file, args.onlyfile == file)
+    catalog.ScanCatalog(args.taglist, filter_list)
 
     if catalog.outfile != sys.stdout:
         catalog.outfile.close()
