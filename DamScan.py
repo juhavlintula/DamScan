@@ -26,7 +26,7 @@ import configparser
 import sqlite3
 import psycopg2
 
-__version__ = "1.0.2"
+__version__ = "1.0.3"
 __doc__ = "This program is checking if all the linked or grouped items in a Daminion catalog have same tags."
 
 #   Version history
@@ -54,6 +54,7 @@ __doc__ = "This program is checking if all the linked or grouped items in a Dami
 #           - added option -y/--only as an opposite to -x
 #   1.0.1   – refactoring
 #   1.0.2   – refactoring
+#   1.0.3   – corrected bug when reporting opening a non-existing server catalog
 
 VerboseOutput = 0
 imagefiletypekey = ["%7jnbapuim4$lwk:d45bb3b6-b441-435c-a3ec-b27d067b7c53",
@@ -390,7 +391,7 @@ class DamCatalog:
                                                 user=user, password=pwd)
 
         except (Exception, psycopg2.DatabaseError) as error:
-            sys.stderr.write(error + "\n")
+            sys.stderr.write(error.args[0])
             sys.exit(-1)
 
         self._initMediaList()
