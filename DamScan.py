@@ -86,7 +86,7 @@ class FilterTags(configparser.ConfigParser):
         if filterfile is not None:
             if self.read(filterfile, encoding='utf-8') == []:
                 sys.stderr.write("File " + filterfile + " specified with -x|-y doesn't exist. Option ignored.\n")
-            if include:
+            elif include:
                 self.has_option = self._has_no_option
 
 #       For verbose print the filter list
