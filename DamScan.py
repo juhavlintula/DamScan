@@ -380,7 +380,25 @@ class DamCatalog:
     def _initCategoryList(conn):
         return DamCatalog._initHierList(conn, "categories_table")
 
+    @staticmethod
+    def _open_db_sqlite(name):
+        if os.path.isfile(name):
+            return sqlite3.connect(name)
+        else:
+            sys.stderr.write(name + " is not a valid database file\n")
+            sys.exit(-1)
+
+    @staticmethod
+    def _open_db_postgres(host, port, name, user, pwd):
+        try:
+            return psycopg2.connect(host=host, port=port, database=name,
+                                                user=user, password=pwd)
+        except (Exception, psycopg2.DatabaseError) as error:
+            sys.stderr.write(error.args[0])
+            sys.exit(-1)
+
     def __init__(self, host, port, name, user, pwd, sqlite):
+
         self.CheckName = None
         self.outfile = None
         self.catalog = None
@@ -390,20 +408,10 @@ class DamCatalog:
         self.__dbname = name
         self.__counter = 0
 
-        try:
-            if sqlite:
-                if os.path.isfile(name):
-                    self.catalog = sqlite3.connect(name)
-                else:
-                    sys.stderr.write(name + " is not a valid database file\n")
-                    sys.exit(-1)
-            else:
-                self.catalog = psycopg2.connect(host=host, port=port, database=name,
-                                                user=user, password=pwd)
-
-        except (Exception, psycopg2.DatabaseError) as error:
-            sys.stderr.write(error.args[0])
-            sys.exit(-1)
+        if sqlite:
+            self.catalog = self._open_db_sqlite(name)
+        else:
+            self.catalog = self._open_db_postgres(host, port, name, user, pwd)
 
         self.MediaList = DamCatalog._initMediaList(self.catalog)
         self.EventList = DamCatalog._initEventList(self.catalog)
