@@ -26,7 +26,7 @@ import configparser
 import sqlite3
 import psycopg2
 
-__version__ = "1.0.3"
+__version__ = "1.0.4"
 __doc__ = "This program is checking if all the linked or grouped items in a Daminion catalog have same tags."
 
 #   Version history
@@ -55,6 +55,7 @@ __doc__ = "This program is checking if all the linked or grouped items in a Dami
 #   1.0.1   – refactoring
 #   1.0.2   – refactoring
 #   1.0.3   – corrected bug when reporting opening a non-existing server catalog
+#   1.0.4   – refactoring
 
 VerboseOutput = 0
 imagefiletypekey = ["%7jnbapuim4$lwk:d45bb3b6-b441-435c-a3ec-b27d067b7c53",
@@ -223,8 +224,8 @@ class DamImage:
     def isvalid(self):
         return not self.IsDeleted and self.IsImage
 
-    def __repr__(self):
-        return self.ImageName
+#    def __repr__(self):
+#        return self.ImageName
 
     def _linked(self, select, where):
         tmp_list = []
@@ -311,16 +312,12 @@ class DamImage:
 
 
 class DamCatalog:
-    EventList = {}
-    PlaceList = {}
-    PeopleList = {}
-    KeywordList = {}
-    CategoryList = {}
-    MediaList = {}
 
-    def _initMediaList(self):
+    @staticmethod
+    def _initMediaList(conn):
         # read and create list where the media format id refers to parent category's key value
-        cur = self.catalog.cursor()
+        medialist = {}
+        cur = conn.cursor()
         cur.execute("SELECT id, parentvalueid, value FROM mediaformat_table")
         rows = cur.fetchall()
         tmp_idx = {}
@@ -332,14 +329,18 @@ class DamCatalog:
             while rows[j][1] != 0:
                 j = tmp_idx[rows[j][1]]
                 temp = rows[j][2]
-            self.MediaList[rows[i][0]] = temp
+            medialist[rows[i][0]] = temp
         cur.close()
+        return medialist
 
-    def _initHierList(self, listname, table):
+    @staticmethod
+    def _initHierList(conn, table):
         # read and create standard list of hierarchical tags
-        cur = self.catalog.cursor()
+        cur = conn.cursor()
         cur.execute("SELECT id, parentvalueid, value FROM " + table)
         rows = cur.fetchall()
+        cur.close()
+        tmp_list = {}
         tmp_idx = {}
         for i in range(len(rows)):
             tmp_idx[rows[i][0]] = i
@@ -349,33 +350,43 @@ class DamCatalog:
             while rows[j][1] != 0:
                 j = tmp_idx[rows[j][1]]
                 temp = rows[j][2] + "|" + temp
-            getattr(self, listname)[rows[i][0]] = temp
-        cur.close()
+            tmp_list[rows[i][0]] = temp
+        return tmp_list
 
-    def _initEventList(self):
-        self._initHierList("EventList", "event_table")
+    @staticmethod
+    def _initEventList(conn):
+        return DamCatalog._initHierList(conn, "event_table")
 
-    def _initPlaceList(self):
-        cur = self.catalog.cursor()
+    @staticmethod
+    def _initPlaceList(conn):
+        cur = conn.cursor()
         cur.execute("SELECT id, hierarchylevel, value FROM place_table")
         rows = cur.fetchall()
-        for r in rows:
-            self.PlaceList[r[0]] = (r[1], r[2])
         cur.close()
+        tmplist = {}
+        for r in rows:
+            tmplist[r[0]] = (r[1], r[2])
+        return tmplist
 
-    def _initPeopleList(self):
-        self._initHierList("PeopleList", "people_table")
+    @staticmethod
+    def _initPeopleList(conn):
+        return DamCatalog._initHierList(conn, "people_table")
 
-    def _initKeywordList(self):
-        self._initHierList("KeywordList", "keywords_table")
+    @staticmethod
+    def _initKeywordList(conn):
+        return DamCatalog._initHierList(conn, "keywords_table")
 
-    def _initCategoryList(self):
-        self._initHierList("CategoryList", "categories_table")
+    @staticmethod
+    def _initCategoryList(conn):
+        return DamCatalog._initHierList(conn, "categories_table")
 
     def __init__(self, host, port, name, user, pwd, sqlite):
         self.CheckName = None
         self.outfile = None
         self.catalog = None
+        self.useGroup = None
+        self.fullpath = None
+        self.PrintID = None
         self.__dbname = name
         self.__counter = 0
 
@@ -394,12 +405,12 @@ class DamCatalog:
             sys.stderr.write(error.args[0])
             sys.exit(-1)
 
-        self._initMediaList()
-        self._initEventList()
-        self._initPlaceList()
-        self._initPeopleList()
-        self._initKeywordList()
-        self._initCategoryList()
+        self.MediaList = DamCatalog._initMediaList(self.catalog)
+        self.EventList = DamCatalog._initEventList(self.catalog)
+        self.PlaceList = DamCatalog._initPlaceList(self.catalog)
+        self.PeopleList = DamCatalog._initPeopleList(self.catalog)
+        self.KeywordList = DamCatalog._initKeywordList(self.catalog)
+        self.CategoryList = DamCatalog._initCategoryList(self.catalog)
 
         if VerboseOutput > 0:
             print("Database", self.__dbname, "opened and datastructures initialized.")
@@ -407,9 +418,6 @@ class DamCatalog:
     def __del__(self):
         if self.catalog is not None:
             self.catalog.close()
-
-    def __repr__(self):
-        return "{}".format(self.__dbname)
 
     def set_params(self, group, basename, fullpath, id, outfile):
         self.useGroup = group
@@ -436,7 +444,6 @@ class DamCatalog:
             row = curs.fetchone()
 
         curs.close()
-        raise StopIteration
 
     def ScanCatalog(self, taglist, exclude):
         self.outfile.write("ImageA\tDir\tImageB\tTag\tValueA/Missing A\t\tValueB\n")
