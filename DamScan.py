@@ -25,8 +25,9 @@ import argparse
 import configparser
 import sqlite3
 import psycopg2
+import re
 
-__version__ = "1.0.4"
+__version__ = "1.0.6"
 __doc__ = "This program is checking if all the linked or grouped items in a Daminion catalog have same tags."
 
 #   Version history
@@ -56,6 +57,8 @@ __doc__ = "This program is checking if all the linked or grouped items in a Dami
 #   1.0.2   – refactoring
 #   1.0.3   – corrected bug when reporting opening a non-existing server catalog
 #   1.0.4   – refactoring
+#   1.0.5   – refactoring
+#   1.0.6   – refactoring and added -a/--acknowledged option
 
 VerboseOutput = 0
 imagefiletypekey = ["%7jnbapuim4$lwk:d45bb3b6-b441-435c-a3ec-b27d067b7c53",
@@ -106,80 +109,74 @@ class FilterTags(configparser.ConfigParser):
 
 class DamImage:
 
-    def __getMultiValueTags(self, tag, table, listname):
-        cur = self.__db.catalog.cursor()
-        cur.execute("SELECT id_value FROM " + table + " WHERE id_mediaitem=" + str(self.__id) + " ORDER BY id_value")
+    @staticmethod
+    def _getMultiValueTags(cur, img_id, tag, table, filename, valuelist):
+        cur.execute("SELECT id_value FROM " + table + " WHERE id_mediaitem=" + str(img_id) + " ORDER BY id_value")
         rows = cur.fetchall()
-        setattr(self, tag, [])
+        tmp_list = []
         for r in rows:
-            if r[0] in getattr(self.__db, listname):
-                getattr(self, tag).append(getattr(self.__db, listname)[r[0]])
+            if r[0] in valuelist:
+                tmp_list.append(valuelist[r[0]])
             else:
-                getattr(self, tag).append("–ERROR–")
-                sys.stderr.write("***ERROR: Invalid {} in id: {}, image: {}\\{}\n".format(
-                        tag, self.__id, self._ImagePath, self.ImageName))
-        cur.close()
+                tmp_list.append("–ERROR–")
+                sys.stderr.write("***ERROR: Invalid {} in id: {}, image: {}\n".format(tag, img_id, filename))
+        return tmp_list
 
-    def __init__(self, db, img_id):
-
-        #        imagefiletypes = ["jpeg", "jpg", "tif", "tiff", "cr2", "crw", "nef", "dng"]
-        global imagefiletypekey
-
-        self.__db = db
-        self.__id = img_id
-
-        # get full filename
-        cur = db.catalog.cursor()
+    @staticmethod
+    def _get_filename(cur, img_id):
         cur.execute("SELECT filename, relativepath FROM files WHERE id_mediaitem=" + str(img_id))
         row = cur.fetchone()
         if row is None:
-            self.IsDeleted = True
-            self.IsImage = False
             cur.execute("SELECT filename FROM mediaitems WHERE id=" + str(img_id))
             row = cur.fetchone()
             if row is None:
-                self._ImageName = "<empty>"
+                name = "<empty>"
             else:
-                self._ImageName = row[0]
-                sys.stderr.write("***ERROR: No corresponding file entry for {} (id: {})\n".format(
-                    self._ImageName, img_id))
-            cur.close()
-            return
+                name = row[0]
+            sys.stderr.write("***ERROR: No corresponding file entry for {} (id: {})\n".format(name, img_id))
+            return name, "<empty>", True
+        else:
+            return row[0], row[1], False
 
-        self._ImageName = row[0]
-        self._ImagePath = row[1]
+    @staticmethod
+    def _get_mediaitems_attr(cur, img_id, filename, medialist, eventlist):
 
-        # get Event and Media format (id)
+        global imagefiletypekey
+
         cur.execute("SELECT id_event, id_mediaformat, deleted FROM mediaitems WHERE id=" + str(img_id))
         row = cur.fetchone()
-        self.IsDeleted = bool(row[2])
-        if row[0] in self.__db.EventList:
-            self.Event = self.__db.EventList[row[0]]
+        isdeleted = bool(row[2])
+        if isdeleted:
+            return "", False, isdeleted
+        if row[0] in eventlist:
+            event = eventlist[row[0]]
         else:
-            self.Event = "–ERROR–"
-            sys.stderr.write("***ERROR: Invalid Event in id: {}, image: {}\\{}\n".format(
-                self.__id, self._ImagePath, self.ImageName))
-        if row[1] in self.__db.MediaList:
-            self.IsImage = self.__db.MediaList[row[1]] in imagefiletypekey
+            event = "–ERROR–"
+            sys.stderr.write("***ERROR: Invalid Event in id: {}, image: {}\n".format(img_id, filename))
+        if row[1] in medialist:
+            isimage = medialist[row[1]] in imagefiletypekey
         else:
-            self.IsImage = False
-            sys.stderr.write("***ERROR: Invalid Media format in id: {}, image: {}\\{}\n".format(
-                self.__id, self._ImagePath, self.ImageName))
+            isimage = False
+            sys.stderr.write("***ERROR: Invalid Media format in id: {}, image: {}\n".format(img_id, filename))
+        return event, isimage, isdeleted
 
-        # get Place
+    @staticmethod
+    def _get_place(cur, img_id, filename, places):
         cur.execute("SELECT id_value FROM place_file WHERE id_mediaitem=" + str(img_id))
         rows = cur.fetchall()
-        placelist = []
+        tmp_placelist = []
         for r in rows:
-            placelist.append(self.__db.PlaceList[r[0]])
-        placelist.sort()
-        self.Place = ""
-        for p in placelist:
-            if self.Place != "":
-                self.Place += '|'
-            self.Place += p[1]
+            tmp_placelist.append(places[r[0]])
+        tmp_placelist.sort()
+        placelist = ""
+        for p in tmp_placelist:
+            if placelist != "":
+                placelist += '|'
+            placelist += p[1]
+        return placelist
 
-        # get GPS
+    @staticmethod
+    def _get_GPS(cur, img_id):
         cur.execute("SELECT gpslatitude, gpslongitude, gpsaltitude FROM image WHERE id_mediaitem=" + str(img_id))
         row = cur.fetchone()
         if row is None:
@@ -190,29 +187,53 @@ class DamImage:
             lat = row[0]
             long = row[1]
             alt = row[2]
-        self.GPS = "{}N {}E {}m".format(lat, long, alt)
-        cur.close()
+        GPSstring = "{}N {}E {}m".format(lat, long, alt)
+        return GPSstring
+
+    def __init__(self, img_id, db, session):
+        self._db = db
+        self._id = img_id
+        self._session = session
+
+        cur = db.catalog.cursor()
+        self._ImageName, self._ImagePath, err_flag = self._get_filename(cur, img_id)
+        if err_flag:
+            self.IsDeleted = True
+            self.IsImage = False
+        filename = self._ImagePath + "\\" + self._ImageName
+        self.Event, self.IsImage, self.IsDeleted = self._get_mediaitems_attr(cur, img_id, filename,
+                                                                             db.MediaList, db.EventList)
+        self.Place = self._get_place(cur, img_id, filename, db.PlaceList)
+        self.GPS = self._get_GPS(cur, img_id)
 
         # get list of People, Keywords and Categories
-        self.__getMultiValueTags("People", "people_file", "PeopleList")
-        self.__getMultiValueTags("Keywords", "keywords_file", "KeywordList")
-        self.__getMultiValueTags("Categories", "categories_file", "CategoryList")
+        self.People = self._getMultiValueTags(cur, img_id, "People", "people_file", filename, db.PeopleList)
+        self.Keywords = self._getMultiValueTags(cur, img_id, "Keywords", "keywords_file", filename, db.KeywordList)
+        self.Categories = self._getMultiValueTags(cur, img_id, "Categories", "categories_file", filename,
+                                                  db.CategoryList)
+        cur.close()
+
+    def __str__(self):
+        return self.ImageName
+
+    def __repr__(self):
+        return self.ImageName
 
     @property
     def ImageName(self):
         line = ""
-        if self.__db.FullPath:
+        if self._session.fullpath:
             line += self._ImagePath + "\\"
         line += self._ImageName
-        if self.__db.PrintID:
-            line += " ({})".format(self.__id)
+        if self._session.print_id:
+            line += " ({})".format(self._id)
         return line
 
     @property
     def basename(self):
         name = self._ImageName.rsplit('.', maxsplit=1)[0]
-        if self.__db.CheckName is not None:
-            for c in self.__db.CheckName:
+        if self._session.comp_name is not None:
+            for c in self._session.comp_name:
                 tmp = name.rsplit(c, maxsplit=1)[0]
                 if len(tmp) < 8:
                     break
@@ -224,70 +245,56 @@ class DamImage:
     def isvalid(self):
         return not self.IsDeleted and self.IsImage
 
-#    def __repr__(self):
-#        return self.ImageName
-
-    def _linked(self, select, where):
+    def linked(self, select, where):
         tmp_list = []
-        cur = self.__db.catalog.cursor()
-        cur.execute("SELECT " + select + " FROM mediaitems_link WHERE " + where + "=" + str(self.__id))
+        cur = self._db.catalog.cursor()
+        cur.execute("SELECT " + select + " FROM mediaitems_link WHERE " + where + "=" + str(self._id))
 #        if VerboseOutput:
 #            print("Linked {} count {}: {}".format(where, self.ImageName, cur.rowcount))
         row = cur.fetchall()
         for r in row:
-            img = DamImage(self.__db, r[0])
+            img = DamImage(r[0], self._db, self._session)
             if img.isvalid:
                 tmp_list.append(img)
         cur.close()
         return tmp_list
 
-    def _topItem(self):
-        cur = self.__db.catalog.cursor()
-        cur.execute("SELECT id_topmediaitemstack FROM mediaitems WHERE id=" + str(self.__id))
+    def top_item(self):
+        cur = self._db.catalog.cursor()
+        cur.execute("SELECT id_topmediaitemstack FROM mediaitems WHERE id=" + str(self._id))
         row = cur.fetchone()
         cur.close()
-        if row[0] == self.__id or row[0] is None:
+        if row[0] == self._id or row[0] is None:
             return []
         else:
-            img = DamImage(self.__db, row[0])
+            img = DamImage(row[0], self._db, self._session)
             if img.isvalid:
                 return [img]
             else:
                 return []
 
-    def _bottomItems(self):
+    def bottom_items(self):
         tmp_list = []
-        cur = self.__db.catalog.cursor()
-        cur.execute("SELECT id FROM mediaitems WHERE id_topmediaitemstack=" + str(self.__id))
+        cur = self._db.catalog.cursor()
+        cur.execute("SELECT id FROM mediaitems WHERE id_topmediaitemstack=" + str(self._id))
         rows = cur.fetchall()
         cur.close()
         for r in rows:
-            if r[0] != self.__id:
-                img = DamImage(self.__db, r[0])
+            if r[0] != self._id:
+                img = DamImage(r[0], self._db, self._session)
                 if img.isvalid:
                     tmp_list.append(img)
         return tmp_list
-
-    def LinkedTo(self):
-        if self.__db.useGroup:
-            return self._topItem()
-        else:
-            return self._linked("id_tomediaitem", "id_frommediaitem")
-
-    def LinkedFrom(self):
-        if self.__db.useGroup:
-            return self._bottomItems()
-        else:
-            return self._linked("id_frommediaitem", "id_tomediaitem")
 
     def GetTags(self, tag):
         tags = getattr(self, tag)
         return tags
 
-    def SameSingleValueTag(self, other, tagcat, filter_list):
+    def SameSingleValueTag(self, other, tagcat, filter_list, filter_pairs):
         mytag = self.GetTags(tagcat)
         othertag = other.GetTags(tagcat)
-        if filter_list.has_option(tagcat, mytag) or filter_list.has_option(tagcat, othertag):
+        pair = (tagcat, self._id, other._id) in filter_pairs
+        if filter_list.has_option(tagcat, mytag) or filter_list.has_option(tagcat, othertag) or pair:
             return
 
         line = self.ImageName + "\t<>\t" + other.ImageName + "\t" + tagcat
@@ -295,20 +302,21 @@ class DamImage:
         if mytag != othertag:
             line += "\t'" + mytag + "'\t<>\t'" + othertag + "'"
         if orig_len < len(line):
-            self.__db.outfile.write(line + "\n")
+            self._session.outfile.write(line + "\n")
 
-    def SameMultiValueTags(self, d, other, tagcat, filter_list):
+    def SameMultiValueTags(self, d, other, tagcat, filter_list, filter_pairs):
         mytags = self.GetTags(tagcat)
         othertags = other.GetTags(tagcat)
         line = self.ImageName + "\t" + d + "\t" + other.ImageName + "\t" + tagcat + "\t"
         orig_len = len(line)
         for tagvalue in othertags:
-            if tagvalue not in mytags and not filter_list.has_option(tagcat, tagvalue) and tagvalue != "":
+            pair = (tagcat, self._id, other._id, tagvalue) in filter_pairs
+            if tagvalue not in mytags and not filter_list.has_option(tagcat, tagvalue) and tagvalue != "" and not pair:
                 if len(line) > orig_len:
                     line += ", "
                 line += "'" + tagvalue + "'"
         if orig_len < len(line):
-            self.__db.outfile.write(line + "\n")
+            self._session.outfile.write(line + "\n")
 
 
 class DamCatalog:
@@ -399,14 +407,9 @@ class DamCatalog:
 
     def __init__(self, host, port, name, user, pwd, sqlite):
 
-        self.CheckName = None
-        self.outfile = None
         self.catalog = None
-        self.useGroup = None
-        self.fullpath = None
-        self.PrintID = None
-        self.__dbname = name
-        self.__counter = 0
+        self._dbname = name
+        self._counter = 0
 
         if sqlite:
             self.catalog = self._open_db_sqlite(name)
@@ -421,65 +424,145 @@ class DamCatalog:
         self.CategoryList = DamCatalog._initCategoryList(self.catalog)
 
         if VerboseOutput > 0:
-            print("Database", self.__dbname, "opened and datastructures initialized.")
+            print("Database", self._dbname, "opened and datastructures initialized.")
 
     def __del__(self):
         if self.catalog is not None:
             self.catalog.close()
 
-    def set_params(self, group, basename, fullpath, id, outfile):
-        self.useGroup = group
-        self.FullPath = fullpath
-        self.PrintID = id
-        self.outfile = outfile
-        self.CheckName = basename
-
-    def NextImage(self):
+    def NextImage(self, session):
         curs = self.catalog.cursor()
         curs.execute("SELECT id, filename, deleted FROM mediaitems")
-#        if VerboseOutput > 0:
-#            count = curs.rowcount
-#            if count > 0:
-#                print("Number of files: ", count)
 
         row = curs.fetchone()    # id, filename, deleted
         while row is not None:
             if not bool(row[2]):
-                self.__counter += 1
+                self._counter += 1
                 if VerboseOutput > 0:
-                    print("\r", "{:7} {:7}: {:60}".format(self.__counter, row[0], row[1]), end="", flush=True)
-                yield DamImage(self, row[0])
+                    print("\r", "{:7} {:7}: {:60}".format(self._counter, row[0], row[1]), end="", flush=True)
+                yield DamImage(row[0], self, session)
             row = curs.fetchone()
 
         curs.close()
 
-    def ScanCatalog(self, taglist, exclude):
-        self.outfile.write("ImageA\tDir\tImageB\tTag\tValueA/Missing A\t\tValueB\n")
-        for curr_img in self.NextImage():
+    def ScanCatalog(self, session):
+        session.outfile.write("ImageA\tDir\tImageB\tTag\tValueA/Missing A\t\tValueB\n")
+        taglist = session.tag_cat_list
+        exclude = session.filter_list
+        for curr_img in self.NextImage(session):
             if not curr_img.isvalid:
                 continue
-            ToList = curr_img.LinkedTo()
-            FromList = curr_img.LinkedFrom()
+            if session.group:       # by groups
+                ToList = curr_img.top_item()
+                FromList = curr_img.bottom_items()
+            else:                   # by links
+                ToList = curr_img.linked("id_tomediaitem", "id_frommediaitem")
+                FromList = curr_img.linked("id_frommediaitem", "id_tomediaitem")
             if ToList == [] and FromList == []:
                 continue
             if VerboseOutput > 1:
-                print("")
-                print("{}\t{}\t{}".format(FromList, curr_img, ToList))
-            if self.CheckName is not None:
+                print("\n{}\t{}\t{}".format(FromList, curr_img, ToList))
+            if session.comp_name is not None:
                 for lst in ToList, FromList:
                     for f in lst:
-                        if curr_img.basename != f.basename:
-                            self.outfile.write(curr_img.ImageName + "\t<>\t" + f.ImageName + "\n")
+                        if curr_img.basename != f.basename and ("Name", curr_img._id, f._id) not in session.filter_pairs:
+#                        if curr_img.basename != f.basename:
+                            session.outfile.write(curr_img.ImageName + "\t<>\t" + f.ImageName + "\tName\n")
             for tag in taglist:
                 if tag in ["Event", "Place", "GPS"]:    # single value tags
                     for img in ToList:
-                        curr_img.SameSingleValueTag(img, tag, exclude)
+                        curr_img.SameSingleValueTag(img, tag, exclude, session.filter_pairs)
                 else:                                   # multi value tags
                     for img in ToList:
-                        curr_img.SameMultiValueTags(">", img, tag, exclude)
+                        curr_img.SameMultiValueTags(">", img, tag, exclude, session.filter_pairs)
                     for img in FromList:
-                        curr_img.SameMultiValueTags("<", img, tag, exclude)
+                        curr_img.SameMultiValueTags("<", img, tag, exclude, session.filter_pairs)
 
+
+class FilterPairs(dict):
+    def __init__(self, *arg, **kw):
+        super(FilterPairs, self).__init__(*arg, **kw)
+
+    def nested_set(self, keys, value):
+        for key in keys[:-1]:
+            self = self.setdefault(key, {})
+        self[keys[-1]] = value
+
+    def __contains__(self, item):
+        try:
+            if item[0] in ["Name", "Event", "Place", "GPS"]:
+                in_list = self[item[0]][item[1]][item[2]] == []
+            else:
+                in_list = item[3] in self[item[0]][item[1]][item[2]]
+            return in_list
+        except(KeyError):
+            return False
+
+class SessionParams:
+
+    @staticmethod
+    def _get_item_id(s):
+        mi = re.search("(\S+) \((\d+)\)", s)
+        if mi is not None:
+            return int(s[mi.regs[2][0]:mi.regs[2][1]])
+        else:
+            return None
+
+    @staticmethod
+    def parse_line(line):
+        p = line.split('\t')
+        if len(p) < 4:
+            sys.stderr.write("*Ignored:" + line + "\n")
+            return []
+        tag = p[3]
+        mi1 = SessionParams._get_item_id(p[0])
+        mi2 = SessionParams._get_item_id(p[2])
+        if mi1 is None or mi2 is None:
+            sys.stderr.write("*Ignored:" + line + "\n")
+            return []
+
+        if tag in ["Name", "Event", "Place", "GPS"]:
+            return [tag, mi1, mi2, []]
+        elif len(p) < 5:
+            sys.stderr.write("*Ignored:" + line + "\n")
+            return []
+
+        values = p[4].split(", ")
+        val_list = []
+        for v in values:
+            val_list.append(v[1:-1])        # remove quotes
+        return [tag, mi1, mi2, val_list]
+
+    @staticmethod
+    def read_pairs(filename):
+        pairs = FilterPairs()
+        if filename is not None:
+            if os.path.isfile(filename):
+                with open(filename, "r", encoding="utf-8") as f:
+                    l = f.readline()
+                    while l != "":
+                        l = l.rstrip('\n')
+                        if l == "":
+                            continue
+                        p = SessionParams.parse_line(l)
+                        if p != []:
+                            pairs.nested_set(p[0:3], p[3])
+                        l = f.readline()
+            else:
+                sys.stderr.write(filename + " doesn't exist. Option -a ignored.\n")
+
+        return pairs
+
+    def __init__(self, tag_cat_list=[], fullpath=False, print_id=False, group=False, comp_name=False,
+                 only_tags=False, tagvaluefile=None, filter_pairs=None, outfile=sys.stdout):
+        self.fullpath = fullpath
+        self.print_id = print_id
+        self.group = group
+        self.comp_name = comp_name
+        self.tag_cat_list = tag_cat_list
+        self.filter_list = FilterTags(tagvaluefile, only_tags)
+        self.filter_pairs = self.read_pairs(filter_pairs)
+        self.outfile = outfile
 
 def main():
     global VerboseOutput
@@ -507,6 +590,8 @@ def main():
                         help="Configuration file for tag values that are excluded from comparison.")
     group.add_argument("-y", "--only", dest="onlyfile",
                         help="Configuration file for tag values that are only used for comparison.")
+    parser.add_argument("-a", "--acknowledged", dest="ack_pairs",
+                       help="File containing list of acknowledged differences.")
     parser.add_argument("-v", "--verbose", action="count", dest="verbose", default=0,
                         help="verbose output (always into stdout)")
     parser.add_argument("-b", "--basename", dest="basename", nargs='*', metavar="SEPARATOR",
@@ -543,7 +628,6 @@ def main():
     user = args.user.split('/')[0]
     password = args.user.split('/')[1]
     catalog = DamCatalog(args.server, args.port, args.dbname, user, password, args.sqlite)
-    catalog.set_params(args.group, args.basename, args.fullpath, args.id, args.outfile)
 
     # document the call parameters in the output file
     line = sys.argv[0]
@@ -556,11 +640,12 @@ def main():
         file = args.exfile
     else:
         file = args.onlyfile
-    filter_list = FilterTags(file, args.onlyfile == file)
-    catalog.ScanCatalog(args.taglist, filter_list)
+    session = SessionParams(args.taglist, args.fullpath, args.id, args.group, args.basename,
+                            args.onlyfile == file, file, args.ack_pairs, args.outfile)
+    catalog.ScanCatalog(session)
 
-    if catalog.outfile != sys.stdout:
-        catalog.outfile.close()
+    if session.outfile != sys.stdout:
+        session.outfile.close()
 
     return 0
 
