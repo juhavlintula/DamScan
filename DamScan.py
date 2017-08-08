@@ -27,7 +27,7 @@ import sqlite3
 import psycopg2
 import re
 
-__version__ = "1.0.7"
+__version__ = "1.0.8"
 __doc__ = "This program is checking if all the linked or grouped items in a Daminion catalog have same tags."
 
 #   Version history
@@ -60,6 +60,7 @@ __doc__ = "This program is checking if all the linked or grouped items in a Dami
 #   1.0.5   – refactoring
 #   1.0.6   – refactoring and added -a/--acknowledged option
 #   1.0.7   – added a possibility to have multiple lines for same tag category-image pairs & bug fixing
+#   1.0.8   – minor bug fixes
 
 VerboseOutput = 0
 imagefiletypekey = ["%7jnbapuim4$lwk:d45bb3b6-b441-435c-a3ec-b27d067b7c53",
@@ -561,12 +562,11 @@ class SessionParams:
                 with open(filename, "r", encoding="utf-8") as f:
                     l = f.readline()
                     while l != "":
-                        l = l.rstrip('\n')
-                        if l == "":
-                            continue
-                        p = SessionParams.parse_line(l)
-                        if p != []:
-                            pairs.nested_set(p[0:3], p[3], append=True)
+                        l = l.rstrip()
+                        if l != "":
+                            p = SessionParams.parse_line(l)
+                            if p != []:
+                                pairs.nested_set(p[0:3], p[3], append=True)
                         l = f.readline()
             else:
                 sys.stderr.write(filename + " doesn't exist. Option -a ignored.\n")
