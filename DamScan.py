@@ -27,7 +27,7 @@ import sqlite3
 import psycopg2
 import re
 
-__version__ = "1.0.6"
+__version__ = "1.0.7"
 __doc__ = "This program is checking if all the linked or grouped items in a Daminion catalog have same tags."
 
 #   Version history
@@ -59,6 +59,7 @@ __doc__ = "This program is checking if all the linked or grouped items in a Dami
 #   1.0.4   – refactoring
 #   1.0.5   – refactoring
 #   1.0.6   – refactoring and added -a/--acknowledged option
+#   1.0.7   – added a possibility to have multiple lines for same tag category-image pairs & bug fixing
 
 VerboseOutput = 0
 imagefiletypekey = ["%7jnbapuim4$lwk:d45bb3b6-b441-435c-a3ec-b27d067b7c53",
@@ -145,7 +146,7 @@ class DamImage:
 
         cur.execute("SELECT id_event, id_mediaformat, deleted FROM mediaitems WHERE id=" + str(img_id))
         row = cur.fetchone()
-        isdeleted = bool(row[2])
+        isdeleted = row is None or bool(row[2])
         if isdeleted:
             return "", False, isdeleted
         if row[0] in eventlist:
@@ -203,13 +204,20 @@ class DamImage:
         filename = self._ImagePath + "\\" + self._ImageName
         self.Event, self.IsImage, self.IsDeleted = self._get_mediaitems_attr(cur, img_id, filename,
                                                                              db.MediaList, db.EventList)
-        self.Place = self._get_place(cur, img_id, filename, db.PlaceList)
-        self.GPS = self._get_GPS(cur, img_id)
+        if self.IsDeleted:
+            self.Place = ""
+            self.GPS = ""
+            self.People = []
+            self.Keywords =[]
+            self.Categories = []
+        else:
+            self.Place = self._get_place(cur, img_id, filename, db.PlaceList)
+            self.GPS = self._get_GPS(cur, img_id)
 
-        # get list of People, Keywords and Categories
-        self.People = self._getMultiValueTags(cur, img_id, "People", "people_file", filename, db.PeopleList)
-        self.Keywords = self._getMultiValueTags(cur, img_id, "Keywords", "keywords_file", filename, db.KeywordList)
-        self.Categories = self._getMultiValueTags(cur, img_id, "Categories", "categories_file", filename,
+            # get list of People, Keywords and Categories
+            self.People = self._getMultiValueTags(cur, img_id, "People", "people_file", filename, db.PeopleList)
+            self.Keywords = self._getMultiValueTags(cur, img_id, "Keywords", "keywords_file", filename, db.KeywordList)
+            self.Categories = self._getMultiValueTags(cur, img_id, "Categories", "categories_file", filename,
                                                   db.CategoryList)
         cur.close()
 
@@ -483,10 +491,22 @@ class FilterPairs(dict):
     def __init__(self, *arg, **kw):
         super(FilterPairs, self).__init__(*arg, **kw)
 
-    def nested_set(self, keys, value):
+    def _nested_set(self, keys, value):
         for key in keys[:-1]:
             self = self.setdefault(key, {})
         self[keys[-1]] = value
+
+    def nested_set(self, keys, value, append=False):
+        if append:
+            try:
+                val = self[keys[0]][keys[1]][keys[2]]
+                for v in value:
+                    val.append(v)
+                self._nested_set(keys, val)
+            except (KeyError):
+                self._nested_set(keys, value)
+        else:
+            self._nested_set(keys, value)
 
     def __contains__(self, item):
         try:
@@ -546,7 +566,7 @@ class SessionParams:
                             continue
                         p = SessionParams.parse_line(l)
                         if p != []:
-                            pairs.nested_set(p[0:3], p[3])
+                            pairs.nested_set(p[0:3], p[3], append=True)
                         l = f.readline()
             else:
                 sys.stderr.write(filename + " doesn't exist. Option -a ignored.\n")
