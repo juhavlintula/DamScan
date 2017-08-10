@@ -27,7 +27,7 @@ import sqlite3
 import psycopg2
 import re
 
-__version__ = "1.0.9"
+__version__ = "1.1.0"
 __doc__ = "This program is checking if all the linked or grouped items in a Daminion catalog have same tags."
 
 #   Version history
@@ -62,6 +62,7 @@ __doc__ = "This program is checking if all the linked or grouped items in a Dami
 #   1.0.7   – added a possibility to have multiple lines for same tag category-image pairs & bug fixing
 #   1.0.8   – minor bug fixes
 #   1.0.9   – minor bug fixes
+#   1.1.0   – new public release of the -a option
 
 VerboseOutput = 0
 imagefiletypekey = ["%7jnbapuim4$lwk:d45bb3b6-b441-435c-a3ec-b27d067b7c53",
@@ -274,7 +275,7 @@ class DamImage:
         cur.execute("SELECT id_topmediaitemstack FROM mediaitems WHERE id=" + str(self._id))
         row = cur.fetchone()
         cur.close()
-        if row[0] == self._id or row[0] is None:
+        if row is None or row[0] == self._id:
             return []
         else:
             img = DamImage(row[0], self._db, self._session)
