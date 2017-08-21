@@ -133,6 +133,8 @@ class DamImage:
                                                     self._db.KeywordList)
             self.Categories = self._getMultiValueTags(cur, self._id, "Categories", "categories_file", filename,
                                                       self._db.CategoryList)
+            self.Collections = self._getMultiValueTags(cur, self._id, "Collections", "systemcollection_file", filename,
+                                                       self._db.CollectionList)
         cur.close()
 
     def image_eq(self, other):
@@ -157,6 +159,8 @@ class DamImage:
             lst.append("Keywords")
         if sorted(self.Categories) != sorted(other.Categories):
             lst.append("Categories")
+        if sorted(self.Collections) != sorted(other.Collections):
+            lst.append("Collections")
         return lst == [], lst
 
     @property

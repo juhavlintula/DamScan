@@ -75,6 +75,10 @@ class DamCatalog:
         return DamCatalog._initHierList(conn, "categories_table")
 
     @staticmethod
+    def _initCollectionList(conn):
+        return DamCatalog._initHierList(conn, "systemcollection_table")
+
+    @staticmethod
     def _open_db_sqlite(name):
         if os.path.isfile(name):
             return sqlite3.connect(name)
@@ -113,6 +117,7 @@ class DamCatalog:
         self.PeopleList = DamCatalog._initPeopleList(self.catalog)
         self.KeywordList = DamCatalog._initKeywordList(self.catalog)
         self.CategoryList = DamCatalog._initCategoryList(self.catalog)
+        self.CollectionList = DamCatalog._initCollectionList(self.catalog)
 
     @staticmethod
     def NextImage(cat, session, verbose=0):
