@@ -9,14 +9,12 @@ imagefiletypekey = ["%7jnbapuim4$lwk:d45bb3b6-b441-435c-a3ec-b27d067b7c53",
 
 def get_image_by_name(path, name, db, session):
     cur = db.catalog.cursor()
-#   cur.execute("SELECT id_mediaitem FROM files WHERE filename='" + name + "' AND relativepath='" + path + "'")
     if isinstance(cur, sqlite3.Cursor):
         cur.execute("SELECT id_mediaitem FROM files WHERE filename = ? AND relativepath = ?", (name, path))
     elif isinstance(cur, psycopg2.extensions.cursor):
         cur.execute("SELECT id_mediaitem FROM files WHERE filename = %s AND relativepath = %s", (name, path))
     row = cur.fetchone()
-    if row is None:
-        # sys.stderr.write("***ERROR: No corresponding file entry for {}\\{} in {}\n".format(path, name, db._dbname))
+    if row is None or row[0] is None:
         return None
     else:
         return DamImage(row[0], db, session)
@@ -58,22 +56,23 @@ class DamImage:
 
         global imagefiletypekey
 
-        cur.execute("SELECT id_event, id_mediaformat, deleted FROM mediaitems WHERE id=" + str(img_id))
+        cur.execute("SELECT deleted, id_event, id_mediaformat, creationdatetime FROM mediaitems WHERE id=" +
+                    str(img_id))
         row = cur.fetchone()
-        isdeleted = row is None or bool(row[2])
+        isdeleted = row is None or bool(row[0])
         if isdeleted:
-            return "", False, isdeleted
-        if row[0] in eventlist:
-            event = eventlist[row[0]]
+            return "", False, isdeleted, None
+        if row[1] in eventlist:
+            event = eventlist[row[1]]
         else:
             event = "–ERROR–"
             sys.stderr.write("***ERROR: Invalid Event in id: {}, image: {}\n".format(img_id, filename))
-        if row[1] in medialist:
-            isimage = medialist[row[1]] in imagefiletypekey
+        if row[2] in medialist:
+            isimage = medialist[row[2]] in imagefiletypekey
         else:
             isimage = False
             sys.stderr.write("***ERROR: Invalid Media format in id: {}, image: {}\n".format(img_id, filename))
-        return event, isimage, isdeleted
+        return event, isimage, isdeleted, row[3]
 
     @staticmethod
     def _get_place(cur, img_id, filename, places):
@@ -116,7 +115,7 @@ class DamImage:
             self.IsDeleted = True
             self.IsImage = False
         filename = self._ImagePath + "\\" + self._ImageName
-        self.Event, self.IsImage, self.IsDeleted = self._get_mediaitems_attr(cur, self._id, filename,
+        self.Event, self.IsImage, self.IsDeleted, self.creationtime = self._get_mediaitems_attr(cur, self._id, filename,
                                                                              self._db.MediaList, self._db.EventList)
         if self.IsDeleted:
             self.Place = ""
@@ -138,12 +137,14 @@ class DamImage:
 
     def image_eq(self, other):
         if other is None:
-            return False, ["-ERROR-"]
+            return False, ["ERROR: file missing"]
         lst = []
-        if self._ImageName != other._ImageName:
-            lst.append("Filename")
-        if self._ImagePath != other._ImagePath:
-            lst.append("Path")
+#        if self._ImageName != other._ImageName:
+#            lst.append("Filename")
+#        if self._ImagePath != other._ImagePath:
+#            lst.append("Path")
+        if self.creationtime != other.creationtime:
+            lst.append("Creation Time")
         if self.Place != other.Place:
             lst.append("Place")
         if self.GPS != other.GPS:
