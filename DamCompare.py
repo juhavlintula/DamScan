@@ -25,12 +25,13 @@ from Daminion.SessionParams import SessionParams
 from Daminion.DamCatalog import DamCatalog
 from Daminion.DamImage import DamImage, get_image_by_name
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 __doc__ = "This program is checking if the metadata in Daminion database is the same as in the media items."
 
 #   Version history
 #   0.1.0   – first released version
 #   0.2.0   – updated the options, added creation date
+#   0.3.0   – added collections
 
 
 def compare_image(img1, img2, session):
@@ -72,19 +73,19 @@ def main():
     parser.add_argument("-i", "--id", dest="id", default=False,
                         action="store_true",
                         help="Print database id after the filename")
-    parser.add_argument("-t", "--tags", dest="taglist", nargs='*', default=alltags, choices=alltags,
-                        help="Tag categories to be checked [all]. "
-                        "[Ignored] Allowed values for taglist are Event, Place, GPS, People, Keywords and Categories.")
+#    parser.add_argument("-t", "--tags", dest="taglist", nargs='*', default=alltags, choices=alltags,
+#                        help="Tag categories to be checked [all]. "
+#                        "[Ignored] Allowed values for taglist are Event, Place, GPS, People, Keywords and Categories.")
     parser.add_argument("-v", "--verbose", action="count", dest="verbose", default=0,
                         help="verbose output (always into stdout)")
     parser.add_argument("-l", "--sqlite", dest="sqlite", default=False,
                         action="store_true",
                         help="Use Sqlite (= standalone) instead of Postgresql (=server)")
-    group = parser.add_mutually_exclusive_group()
-    group.add_argument("-x", "--exclude", dest="exfile",
-                        help="Configuration file for tag values that are excluded from comparison.")
-    group.add_argument("-y", "--only", dest="onlyfile",
-                        help="Configuration file for tag values that are only used for comparison.")
+#    group = parser.add_mutually_exclusive_group()
+#    group.add_argument("-x", "--exclude", dest="exfile",
+#                        help="Configuration file for tag values that are excluded from comparison.")
+#    group.add_argument("-y", "--only", dest="onlyfile",
+#                        help="Configuration file for tag values that are only used for comparison.")
 #    parser.add_argument("-a", "--acknowledged", dest="ack_pairs",
 #                       help="File containing list of acknowledged differences.")
     parser.add_argument("-c1", "--catalog1", dest="dbname1", nargs=1, # default="NetCatalog",
