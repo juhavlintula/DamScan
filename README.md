@@ -5,4 +5,6 @@ Daminion digital asset management (DAM) system is a great tool for assigning met
 
 Daminion writes all tags (with few exceptions) into the media files, so that the metadata is also available outside Daminion. In Daminion there is no facility to verify if the metadata in the media items is the same as is in the Daminion database. DamCompare.py solves this problem by reporting inconsistencies in metadata for Daminion server and standalone catalogs. Inconsistencies can arise either by changing metadata in image file outside of Daminion, so the Daminion catalog is not aware of those changes or when changes in Daminion are not completely written into the metadata in the files.
 
-You need to have Python 3.x and psycopg2 installed. See detailed installation instructions in manual pages.
+Copy Daminion folder and DamScan.py and/or DamCompare.py into a selected folder.
+
+You need to have Python 3.x and psycopg2 installed, see details in the manual page.
