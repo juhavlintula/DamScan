@@ -28,16 +28,26 @@ imagefiletypekey = ["%7jnbapuim4$lwk:d45bb3b6-b441-435c-a3ec-b27d067b7c53",
 
 
 def get_image_by_name(path, name, db, session):
+    # this should do cur.fetchall() and select the row which is not deleted
+    # no this is taking the first row from the database
     cur = db.catalog.cursor()
     if isinstance(cur, sqlite3.Cursor):
         cur.execute("SELECT id_mediaitem FROM files WHERE filename = ? AND relativepath = ?", (name, path))
     elif isinstance(cur, psycopg2.extensions.cursor):
         cur.execute("SELECT id_mediaitem FROM files WHERE filename = %s AND relativepath = %s", (name, path))
-    row = cur.fetchone()
-    if row is None or row[0] is None:
+    row = cur.fetchall()
+    if row is None: # or row[0] is None:
         return None
     else:
-        return DamImage(row[0], db, session)
+        for r in row:
+            if isinstance(cur, sqlite3.Cursor):
+                cur.execute("SELECT deleted FROM mediaitems WHERE id=?", (r[0], ))
+            elif isinstance(cur, psycopg2.extensions.cursor):
+                cur.execute("SELECT deleted FROM mediaitems WHERE id=%s", (r[0], ))
+            d = cur.fetchone()
+            if d is not None and not bool(d[0]):
+                return DamImage(r[0], db, session)
+        return None
 
 
 class DamImage:
@@ -143,6 +153,7 @@ class DamImage:
             self.People = []
             self.Keywords =[]
             self.Categories = []
+            self.Collections = []
         else:
             self.Place = self._get_place(cur, self._id, filename, self._db.PlaceList)
             self.GPS = self._get_GPS(cur, self._id)
@@ -158,7 +169,7 @@ class DamImage:
         cur.close()
 
     def image_eq(self, other):
-        if other is None:
+        if other is None or other.IsDeleted:
             return False, ["ERROR: file missing"]
         lst = []
 #        if self._ImageName != other._ImageName:

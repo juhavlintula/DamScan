@@ -33,6 +33,7 @@ __doc__ = "This program is checking if the metadata in Daminion database is the 
 #   0.2.0   – updated the options, added creation date
 #   0.3.0   – added collections
 #   0.4.0   – bug fixes and added -y option to path for images to be compared
+#   0.4.1   – improved handling of deleted items in get_image_by_name
 
 
 def compare_image(img1, img2, session):
