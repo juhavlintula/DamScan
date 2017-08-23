@@ -32,6 +32,7 @@ __doc__ = "This program is checking if the metadata in Daminion database is the 
 #   0.1.0   – first released version
 #   0.2.0   – updated the options, added creation date
 #   0.3.0   – added collections
+#   0.4.0   – bug fixes and added -y option to path for images to be compared
 
 
 def compare_image(img1, img2, session):
@@ -57,8 +58,14 @@ def ScanCatalog(catalog1, catalog2, session, verbose=0):
     taglist = session.tag_cat_list
     for curr_img in DamCatalog.NextImage(catalog1, session, verbose):
         if curr_img.isvalid:
-            img2 = get_image_by_name(curr_img._ImagePath, curr_img._ImageName, catalog2, session)
-            compare_image(curr_img, img2, session)
+            comp = session.onlydir == []
+            for d in session.onlydir:
+                comp |= d == curr_img._ImagePath[:len(d)]
+                if comp:
+                    break
+            if comp:
+                img2 = get_image_by_name(curr_img._ImagePath, curr_img._ImageName, catalog2, session)
+                compare_image(curr_img, img2, session)
 
 def main():
     alltags = ["Event", "Place", "GPS", "People", "Keywords", "Categories"]
@@ -81,11 +88,11 @@ def main():
     parser.add_argument("-l", "--sqlite", dest="sqlite", default=False,
                         action="store_true",
                         help="Use Sqlite (= standalone) instead of Postgresql (=server)")
-#    group = parser.add_mutually_exclusive_group()
+    group = parser.add_mutually_exclusive_group()
 #    group.add_argument("-x", "--exclude", dest="exfile",
 #                        help="Configuration file for tag values that are excluded from comparison.")
-#    group.add_argument("-y", "--only", dest="onlyfile",
-#                        help="Configuration file for tag values that are only used for comparison.")
+    group.add_argument("-y", "--only", dest="onlydir", nargs='+', default=[],
+                        help="List of folder paths that are included for comparison.")
 #    parser.add_argument("-a", "--acknowledged", dest="ack_pairs",
 #                       help="File containing list of acknowledged differences.")
     parser.add_argument("-c1", "--catalog1", dest="dbname1", nargs=1, # default="NetCatalog",
@@ -141,7 +148,8 @@ def main():
     line += '\n'
     args.outfile.write(line)
 
-    session = SessionParams(args.taglist, args.fullpath, args.id, False, None, False, None, None, args.outfile)
+    session = SessionParams(None, args.fullpath, args.id, False, None, False, None, None, args.outfile)
+    session.onlydir = args.onlydir
     #       For verbose print the filter list
 
     ScanCatalog(catalog1, catalog2, session, VerboseOutput)
