@@ -77,6 +77,7 @@ class FilterTags(configparser.ConfigParser):
     def __init__(self, filterfile, include=False):
         configparser.ConfigParser.__init__(self, allow_no_value=True)
         self.optionxform = str
+        #    self.delimeters = (None,)
         self.has_option = self._has_option
         if filterfile is not None:
             if self.read(filterfile, encoding='utf-8') == []:
@@ -140,7 +141,7 @@ class SessionParams:
         return pairs
 
     def __init__(self, tag_cat_list=[], fullpath=False, print_id=False, group=False, comp_name=None,
-                 only_tags=False, tagvaluefile=None, filter_pairs=None, outfile=sys.stdout):
+                 only_tags=False, tagvaluefile=None, filter_pairs=None, onlydir=[], outfile=sys.stdout):
         self.fullpath = fullpath
         self.print_id = print_id
         self.group = group
@@ -148,4 +149,8 @@ class SessionParams:
         self.tag_cat_list = tag_cat_list
         self.filter_list = FilterTags(tagvaluefile, only_tags)
         self.filter_pairs = self.read_pairs(filter_pairs)
+        if onlydir is None:
+            self.onlydir = []
+        else:
+            self.onlydir = onlydir
         self.outfile = outfile

@@ -21,12 +21,13 @@
 import sys
 import datetime
 import argparse
+import configparser
 from Daminion.SessionParams import SessionParams
 from Daminion.DamCatalog import DamCatalog
 from Daminion.DamImage import DamImage, get_image_by_name
 
-__version__ = "0.3.0"
-__doc__ = "This program is checking if the metadata in Daminion database is the same as in the media items."
+__version__ = "1.2.1"
+__doc__ = "This program compares metadata of items in two Daminion catalogs."
 
 #   Version history
 #   0.1.0   – first released version
@@ -34,7 +35,133 @@ __doc__ = "This program is checking if the metadata in Daminion database is the 
 #   0.3.0   – added collections
 #   0.4.0   – bug fixes and added -y option to path for images to be compared
 #   0.4.1   – improved handling of deleted items in get_image_by_name
+#   0.4.2   – updated program desrciption message
+#   0.5.0   – added support for INI file
+#   1.2.1   – sync the version numbering with DamScan.py
 
+alltags = ["Event", "Place", "GPS", "People", "Keywords", "Categories", "Collections"]
+
+
+def check_conf(conf):
+    valid_config = {'Database': { 'sqlite': None, 'catalog1': None, 'catalog2': None, 'port': None, 'server': None,
+                                  'user': None },
+                  'Session': { 'fullpath': None, 'id': None, 'exclude': None, 'only': None,'outfile': None,
+                               'verbose': None}}
+
+    valid_conf = configparser.ConfigParser(allow_no_value=True)
+    valid_conf.read_dict(valid_config)
+    for sect in conf.sections():
+        for key in conf.options(sect):
+            if not valid_conf.has_option(sect,key):
+                sys.stderr.write("* Warning: INI file has an invalid option '{}':'{}' – Ignored\n".format(sect, key))
+
+def read_ini(args, conf):
+    global alltags
+
+    if args.ini_file is not None and conf.read(args.ini_file, encoding='utf-8') == []:
+        sys.stderr.write("INI File " + args.ini_file + " doesn't exist. Option ignored.\n")
+    check_conf(conf)
+
+    if args.sqlite is None:
+        args.sqlite = conf.getboolean('Database', 'SQLite', fallback=False)
+    if args.dbname1 is None:
+        args.dbname1 = conf.get('Database', 'Catalog1', fallback=None)
+    if args.dbname2 is None:
+        args.dbname2 = conf.get('Database', 'Catalog2', fallback=None)
+    if args.port is None:
+        args.port = conf.getint('Database', 'Port', fallback=5432)
+    if args.server is None:
+        args.server = conf.get('Database', 'Server', fallback='localhost')
+    if args.user is None:
+        args.user = conf.get('Database', 'User', fallback="postgres/postgres")
+
+    if args.fullpath is None:
+        args.fullpath = conf.getboolean('Session', 'Fullpath', fallback=False)
+    if args.id is None:
+        args.id = conf.getboolean('Session', 'ID', fallback=False)
+
+#   if args.taglist is None:
+#       taglist = conf.get('Session', 'Tags', fallback=None)
+#       if taglist is None or taglist.lower()=="all":
+#           args.taglist = alltags
+#       else:
+#           args.taglist = taglist.split()
+#   if args.exfile is None and args.onlyfile is None:
+#       excf = conf.get('Session', 'exclude', fallback=None)
+#       incf = conf.get('Session', 'only', fallback=None)
+#       if excf is not None and incf is not None:
+#           sys.stderr.write("* Warning: INI file has specified both exclude={} and only={} – {} ignored\n".format(
+#               excf, incf, incf))
+#           incf = None
+#       args.exfile = excf
+#       args.onlyfile = incf
+
+    if args.onlydir is None:
+        dirlist = conf.get('Session', 'Only', fallback="")
+        if dirlist is not None:
+            args.onlydir = dirlist.split()
+    if args.outfilename is None:
+        file = conf.get('Session', 'Outfile', fallback=None)
+    else:
+        file = args.outfilename
+    if file is None or file == "" or file == "<stdout>":
+        args.outfile = sys.stdout
+    else:
+        args.outfile = open(file, 'w', encoding='utf-8')
+    if args.verbose is None:
+        args.verbose = conf.getint('Session', 'Verbose', fallback=0)
+
+def create_parser():
+    global alltags
+
+    parser = argparse.ArgumentParser(
+        description="Search inconcistent tags from a Daminion database.")
+
+    # key identification arguments
+    parser.add_argument("--ini", dest="ini_file",
+                       help="INI file for scan parameters.")
+    parser.add_argument("-f", "--fullpath", dest="fullpath", #default=False,
+                        action="store_const", const=True, default=None,
+                        help="Print full directory path and not just file name")
+    parser.add_argument("-i", "--id", dest="id", #default=False,
+                        action="store_const", const=True, default=None,
+                        help="Print database id after the filename")
+    #   parser.add_argument("-t", "--tags", dest="taglist", nargs='*', choices=alltags, #default=alltags,
+    #                    help="Tag categories to be checked [all]. "
+    #                    "Allowed values for taglist are Event, Place, GPS, People, Keywords, Categories and Collections.")
+    group = parser.add_mutually_exclusive_group()
+    #   group.add_argument("-x", "--exclude", dest="exfile",
+    #                    help="Configuration file for tag values that are excluded from comparison.")
+    group.add_argument("-y", "--only", dest="onlydir", nargs='+',
+                        help="List of folder paths that are included for comparison.")
+    group = parser.add_mutually_exclusive_group()
+
+    parser.add_argument("-l", "--sqlite", dest="sqlite", #default=False,
+                        action="store_const", const=True, default=None,
+                        help="Use Sqlite (= standalone) instead of Postgresql (=server)")
+    parser.add_argument("-c1", "--catalog1", dest="dbname1", # nargs=1,  # default="NetCatalog",
+                        help="Daminion catalog name [NetCatalog]")
+    parser.add_argument("-c2", "--catalog2", dest="dbname2", # nargs=1,  # default="NetCatalog",
+                        help="Daminion catalog name [NetCatalog]")
+    parser.add_argument("-s", "--server", dest="server", #default="localhost",
+                        help="Postgres server [localhost]")
+    parser.add_argument("-p", "--port", dest="port", type=int, #default=5432,
+                        help="Postgres server port [5432]")
+    parser.add_argument("-u", "--user", dest="user", #default="postgres/postgres",
+                        help="Postgres user/password [postgres/postgres]")
+
+    parser.add_argument("-v", "--verbose", action="count", dest="verbose", #default=0,
+                        help="verbose output (always into stdout)")
+    parser.add_argument("-o", "--output", dest="outfilename", # type=argparse.FileType('w', encoding='utf-8'),
+                        # default=sys.stdout,
+                        help="Output file for report [stdout]")
+    parser.add_argument("--version",
+                        action="store_true", dest="version", default=False,
+                        help="Display version information and exit.")
+
+    conf = configparser.ConfigParser(allow_no_value=True)
+
+    return parser, conf
 
 def compare_image(img1, img2, session):
     same, tags = img1.image_eq(img2)
@@ -69,50 +196,9 @@ def ScanCatalog(catalog1, catalog2, session, verbose=0):
                 compare_image(curr_img, img2, session)
 
 def main():
-    alltags = ["Event", "Place", "GPS", "People", "Keywords", "Categories"]
-
-    parser = argparse.ArgumentParser(
-        description="Search inconcistent tags from a Daminion database.")
-
-    # key identification arguments
-    parser.add_argument("-f", "--fullpath", dest="fullpath", default=False,
-                        action="store_true",
-                        help="Print full directory path and not just file name")
-    parser.add_argument("-i", "--id", dest="id", default=False,
-                        action="store_true",
-                        help="Print database id after the filename")
-#    parser.add_argument("-t", "--tags", dest="taglist", nargs='*', default=alltags, choices=alltags,
-#                        help="Tag categories to be checked [all]. "
-#                        "[Ignored] Allowed values for taglist are Event, Place, GPS, People, Keywords and Categories.")
-    parser.add_argument("-v", "--verbose", action="count", dest="verbose", default=0,
-                        help="verbose output (always into stdout)")
-    parser.add_argument("-l", "--sqlite", dest="sqlite", default=False,
-                        action="store_true",
-                        help="Use Sqlite (= standalone) instead of Postgresql (=server)")
-    group = parser.add_mutually_exclusive_group()
-#    group.add_argument("-x", "--exclude", dest="exfile",
-#                        help="Configuration file for tag values that are excluded from comparison.")
-    group.add_argument("-y", "--only", dest="onlydir", nargs='+', default=[],
-                        help="List of folder paths that are included for comparison.")
-#    parser.add_argument("-a", "--acknowledged", dest="ack_pairs",
-#                       help="File containing list of acknowledged differences.")
-    parser.add_argument("-c1", "--catalog1", dest="dbname1", nargs=1, # default="NetCatalog",
-                        help="Daminion catalog name [NetCatalog]")
-    parser.add_argument("-c2", "--catalog2", dest="dbname2", nargs=1, # default="NetCatalog",
-                        help="Daminion catalog name [NetCatalog]")
-    parser.add_argument("-s", "--server", dest="server", default="localhost",
-                        help="Postgres server [localhost]")
-    parser.add_argument("-p", "--port", dest="port", type=int, default=5432,
-                        help="Postgres server port [5432]")
-    parser.add_argument("-u", "--user", dest="user", default="postgres/postgres",
-                        help="Postgres user/password [postgres/postgres]")
-    parser.add_argument("-o", "--output", dest="outfile", type=argparse.FileType('w', encoding='utf-8'),
-                        default=sys.stdout, help="Output file for report [stdout]")
-    parser.add_argument("--version",
-                        action="store_true", dest="version", default=False,
-                        help="Display version information and exit.")
-
+    parser, conf = create_parser()
     args = parser.parse_args()
+    read_ini(args, conf)
 
     VerboseOutput = args.verbose
     if args.version or VerboseOutput > 0:
@@ -126,18 +212,17 @@ def main():
     if args.dbname1 is None or args.dbname2 is None:
         sys.stderr.write("dbname 1 ({}) and/or dbname2 ({}) cannot be empty.\n".format(args.dbname1, args.dbname2))
         sys.exit(-1)
-    if args.dbname1[0] == args.dbname2[0]:
+    if args.dbname1 == args.dbname2:
         sys.stderr.write("dbname 1 ({}) is the same as dbname2\n".format(args.dbname1[0]))
         sys.exit(-1)
-#    if args
 
     user = args.user.split('/')[0]
     password = args.user.split('/')[1]
-    catalog1 = DamCatalog(args.server, args.port, args.dbname1[0], user, password, args.sqlite)
+    catalog1 = DamCatalog(args.server, args.port, args.dbname1, user, password, args.sqlite)
     catalog1.initCatalogConstants()
     if VerboseOutput > 0:
         print("Database", args.dbname1[0], "opened and datastructures initialized.")
-    catalog2 = DamCatalog(args.server, args.port, args.dbname2[0], user, password, args.sqlite)
+    catalog2 = DamCatalog(args.server, args.port, args.dbname2, user, password, args.sqlite)
     catalog2.initCatalogConstants()
     if VerboseOutput > 0:
         print("Database", args.dbname2[0], "opened and datastructures initialized.")
@@ -149,9 +234,7 @@ def main():
     line += '\n'
     args.outfile.write(line)
 
-    session = SessionParams(None, args.fullpath, args.id, False, None, False, None, None, args.outfile)
-    session.onlydir = args.onlydir
-    #       For verbose print the filter list
+    session = SessionParams(None, args.fullpath, args.id, False, None, False, None, None, args.onlydir, args.outfile)
 
     ScanCatalog(catalog1, catalog2, session, VerboseOutput)
 
