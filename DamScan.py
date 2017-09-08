@@ -25,7 +25,7 @@ import configparser
 from Daminion.SessionParams import SessionParams
 from Daminion.DamCatalog import DamCatalog
 
-__version__ = "1.2.0"
+__version__ = "1.3.0"
 __doc__ = "This program is checking if all the linked or grouped items in a Daminion catalog have same tags."
 
 #   Version history
@@ -65,14 +65,16 @@ __doc__ = "This program is checking if all the linked or grouped items in a Dami
 #   1.2.0   – added support for INI file
 #           – added support for Collections
 #   1.2.1   – fix for an empty Outfile parameter
+#   1.3.0   – some updates to INI file structure
 
 alltags = ["Event", "Place", "GPS", "People", "Keywords", "Categories", "Collections"]
 
 def check_conf(conf):
     valid_config = {'Database': { 'sqlite': None, 'catalog': None, 'port': None, 'server': None, 'user': None },
                   'Session': { 'fullpath': None, 'id': None, 'group': None, 'basename': None, 'tags': None,
-                               'acknowledged': None, 'exclude': None, 'only': None,'outfile': None,
-                               'verbose': None}}
+                               'acknowledged': None, 'excludetags': None, 'onlytags': None,
+                               'outfile': None, 'verbose': None,
+                               'exclude': None, 'only': None }}
 
     valid_conf = configparser.ConfigParser(allow_no_value=True)
     valid_conf.read_dict(valid_config)
@@ -123,16 +125,19 @@ def read_ini(args, conf):
             args.taglist = taglist.split()
     if args.ack_pairs is None:
         args.ack_pairs = conf.get('Session', 'acknowledged', fallback=None)
-#    if args.exfile is None and args.onlyfile is None:
-#        if conf.getboolean('Session', 'TagValues', fallback=False):
-#           args.onlyfile = conf.get('Session', 'TagValuesFile', fallback=None)
-#        else:
-#            args.exfile = conf.get('Session', 'TagValuesFile', fallback=None)
     if args.exfile is None and args.onlyfile is None:
-        excf = conf.get('Session', 'exclude', fallback=None)
-        incf = conf.get('Session', 'only', fallback=None)
+        excf = conf.get('Session', 'excludetags', fallback=None)
+        if excf is None:        # compatibility with old specs
+            excf = conf.get('Session', 'exclude', fallback=None)
+            if excf is not None:
+                sys.stderr.write("* Warning: 'Exclude' is discontinued, use 'ExcludeTags' instead.\n")
+        incf = conf.get('Session', 'onlytags', fallback=None)
+        if incf is None:        # compatibility with old specs
+            incf = conf.get('Session', 'only', fallback=None)
+            if incf is not None:
+                sys.stderr.write("* Warning: 'Only' is discontinued, use 'OnlyTags' instead.\n")
         if excf is not None and incf is not None:
-            sys.stderr.write("* Warning: INI file has specified both exclude={} and only={} – {} ignored\n".format(
+            sys.stderr.write("* Warning: INI file has specified both excludetags={} and onlytags={} – {} ignored\n".format(
                 excf, incf, incf))
             incf = None
         args.exfile = excf
@@ -171,9 +176,9 @@ def create_parser():
                         help="Tag categories to be checked [all]. "
                         "Allowed values for taglist are Event, Place, GPS, People, Keywords, Categories and Collections.")
     group = parser.add_mutually_exclusive_group()
-    group.add_argument("-x", "--exclude", dest="exfile",
+    group.add_argument("-x", "--excludetags","--exclude", dest="exfile",
                         help="Configuration file for tag values that are excluded from comparison.")
-    group.add_argument("-y", "--only", dest="onlyfile",
+    group.add_argument("-y", "--onlytags", "--only", dest="onlyfile",
                         help="Configuration file for tag values that are only used for comparison.")
     parser.add_argument("-a", "--acknowledged", dest="ack_pairs",
                        help="File containing list of acknowledged differences.")
@@ -274,7 +279,7 @@ def main():
     else:
         file = args.onlyfile
     session = SessionParams(args.taglist, args.fullpath, args.id, args.group, args.basename,
-                            args.onlyfile == file, file, args.ack_pairs, None, args.outfile)
+                            args.onlyfile == file, file, args.ack_pairs, outfile=args.outfile)
     #       For verbose print the filter list
     if VerboseOutput > 0:
         line = "Tags that are"

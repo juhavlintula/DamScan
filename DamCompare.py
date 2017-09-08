@@ -22,11 +22,12 @@ import sys
 import datetime
 import argparse
 import configparser
+import shlex
 from Daminion.SessionParams import SessionParams
 from Daminion.DamCatalog import DamCatalog
 from Daminion.DamImage import DamImage, get_image_by_name
 
-__version__ = "1.2.1"
+__version__ = "1.3.0"
 __doc__ = "This program compares metadata of items in two Daminion catalogs."
 
 #   Version history
@@ -38,6 +39,7 @@ __doc__ = "This program compares metadata of items in two Daminion catalogs."
 #   0.4.2   – updated program desrciption message
 #   0.5.0   – added support for INI file
 #   1.2.1   – sync the version numbering with DamScan.py
+#   1.3.0   – added support for exclude folders
 
 alltags = ["Event", "Place", "GPS", "People", "Keywords", "Categories", "Collections"]
 
@@ -45,8 +47,8 @@ alltags = ["Event", "Place", "GPS", "People", "Keywords", "Categories", "Collect
 def check_conf(conf):
     valid_config = {'Database': { 'sqlite': None, 'catalog1': None, 'catalog2': None, 'port': None, 'server': None,
                                   'user': None },
-                  'Session': { 'fullpath': None, 'id': None, 'exclude': None, 'only': None,'outfile': None,
-                               'verbose': None}}
+                  'Session': { 'fullpath': None, 'id': None, 'excludepaths': None, 'onlypaths': None,'outfile': None,
+                               'verbose': None, 'exclude': None, 'only': None}}
 
     valid_conf = configparser.ConfigParser(allow_no_value=True)
     valid_conf.read_dict(valid_config)
@@ -86,20 +88,32 @@ def read_ini(args, conf):
 #           args.taglist = alltags
 #       else:
 #           args.taglist = taglist.split()
-#   if args.exfile is None and args.onlyfile is None:
-#       excf = conf.get('Session', 'exclude', fallback=None)
-#       incf = conf.get('Session', 'only', fallback=None)
-#       if excf is not None and incf is not None:
-#           sys.stderr.write("* Warning: INI file has specified both exclude={} and only={} – {} ignored\n".format(
-#               excf, incf, incf))
-#           incf = None
-#       args.exfile = excf
-#       args.onlyfile = incf
-
+    no_cmd_ex = args.exdir is None
+    no_cmd_inc = args.onlydir is None
+    if args.exdir is None:
+        excf = conf.get('Session', 'excludepaths', fallback="")
+        if excf == "":
+            excf = conf.get('Session', 'exclude', fallback="")
+            if excf != "":
+                sys.stderr.write("* Warning: 'Exclude' is discontinued, use 'ExcludePaths' instead.\n")
+        args.exdir = shlex.split(excf)
     if args.onlydir is None:
-        dirlist = conf.get('Session', 'Only', fallback="")
-        if dirlist is not None:
-            args.onlydir = dirlist.split()
+        incf = conf.get('Session', 'onlypaths', fallback="")
+        if incf == "":
+            incf = conf.get('Session', 'only', fallback="")
+            if incf != "":
+                sys.stderr.write("* Warning: 'Only' is discontinued, use 'OnlyPaths' instead.\n")
+        args.onlydir = shlex.split(incf)
+    if args.onlydir != [] and args.exdir != []:
+        if no_cmd_ex and no_cmd_inc:
+            sys.stderr.write("* Warning: INI file has specified both excludepaths={} and onlypaths={} – {} ignored\n".format(
+                args.exdir, args.onlydir, args.onlydir))
+            args.onlydir = []
+        elif no_cmd_ex:
+            args.exdir = []
+        elif no_cmd_inc:
+            args.onlydir = []
+
     if args.outfilename is None:
         file = conf.get('Session', 'Outfile', fallback=None)
     else:
@@ -130,9 +144,9 @@ def create_parser():
     #                    help="Tag categories to be checked [all]. "
     #                    "Allowed values for taglist are Event, Place, GPS, People, Keywords, Categories and Collections.")
     group = parser.add_mutually_exclusive_group()
-    #   group.add_argument("-x", "--exclude", dest="exfile",
-    #                    help="Configuration file for tag values that are excluded from comparison.")
-    group.add_argument("-y", "--only", dest="onlydir", nargs='+',
+    group.add_argument("-x", "--excludepaths", "--exclude", dest="exdir", nargs='+',
+                        help="List of folder paths that are excluded from comparison.")
+    group.add_argument("-y", "--onlypaths", "--only", dest="onlydir", nargs='+',
                         help="List of folder paths that are included for comparison.")
     group = parser.add_mutually_exclusive_group()
 
@@ -181,16 +195,26 @@ def compare_image(img1, img2, session):
             session.outfile.write(t)
         session.outfile.write("\n")
 
+def valid_path(path, session):
+    if session.exdir == [] and session.onlydir == []:
+        return True
+    if session.onlydir != []:
+        dirlist = session.onlydir
+    elif session.exdir != []:
+        dirlist = session.exdir
+    match = False
+    for d in dirlist:
+        match |= d == path[:len(d)]
+        if match:
+            break
+    return (match and session.onlydir != []) or (not match and session.exdir != [])
+
 def ScanCatalog(catalog1, catalog2, session, verbose=0):
     session.outfile.write("{}\tDir\t{}\tTags\n".format(catalog1._dbname, catalog2._dbname))
     taglist = session.tag_cat_list
     for curr_img in DamCatalog.NextImage(catalog1, session, verbose):
         if curr_img.isvalid:
-            comp = session.onlydir == []
-            for d in session.onlydir:
-                comp |= d == curr_img._ImagePath[:len(d)]
-                if comp:
-                    break
+            comp = valid_path(curr_img._ImagePath, session)
             if comp:
                 img2 = get_image_by_name(curr_img._ImagePath, curr_img._ImageName, catalog2, session)
                 compare_image(curr_img, img2, session)
@@ -221,11 +245,11 @@ def main():
     catalog1 = DamCatalog(args.server, args.port, args.dbname1, user, password, args.sqlite)
     catalog1.initCatalogConstants()
     if VerboseOutput > 0:
-        print("Database", args.dbname1[0], "opened and datastructures initialized.")
+        print("Database", args.dbname1, "opened and datastructures initialized.")
     catalog2 = DamCatalog(args.server, args.port, args.dbname2, user, password, args.sqlite)
     catalog2.initCatalogConstants()
     if VerboseOutput > 0:
-        print("Database", args.dbname2[0], "opened and datastructures initialized.")
+        print("Database", args.dbname2, "opened and datastructures initialized.")
 
     # document the call parameters in the output file
     line = sys.argv[0]
@@ -234,7 +258,8 @@ def main():
     line += '\n'
     args.outfile.write(line)
 
-    session = SessionParams(None, args.fullpath, args.id, False, None, False, None, None, args.onlydir, args.outfile)
+    session = SessionParams(None, args.fullpath, args.id, exdir=args.exdir, onlydir=args.onlydir,
+                            outfile=args.outfile)
 
     ScanCatalog(catalog1, catalog2, session, VerboseOutput)
 
