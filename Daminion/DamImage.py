@@ -134,6 +134,27 @@ class DamImage:
         GPSstring = "{}N {}E {}m".format(lat, long, alt)
         return GPSstring
 
+    @staticmethod
+    def _none_to_str(s):
+        if s is None:
+            return ""
+        else:
+            return s
+
+    @staticmethod
+    def _get_subject(cur, img_id):
+        cur.execute("SELECT title, description, comments FROM subject WHERE id_mediaitem=" + str(img_id))
+        row = cur.fetchone()
+        if row is None:
+            title = ""
+            description = ""
+            comments = ""
+        else:
+            title = DamImage._none_to_str(row[0])
+            description = DamImage._none_to_str(row[1])
+            comments = DamImage._none_to_str(row[2])
+        return title, description, comments
+
     def __init__(self, img_id, db, session):
         self._db = db
         self._id = img_id
@@ -154,9 +175,13 @@ class DamImage:
             self.Keywords =[]
             self.Categories = []
             self.Collections = []
+            self.Title = ""
+            self.Description = ""
+            self.Comments = ""
         else:
             self.Place = self._get_place(cur, self._id, filename, self._db.PlaceList)
             self.GPS = self._get_GPS(cur, self._id)
+            self.Title, self.Description, self.Comments = self._get_subject(cur, self._id)
 
             # get list of People, Keywords and Categories
             self.People = self._getMultiValueTags(cur, self._id, "People", "people_file", filename, self._db.PeopleList)
@@ -178,6 +203,12 @@ class DamImage:
 #            lst.append("Path")
         if self.creationtime != other.creationtime:
             lst.append("Creation Time")
+        if self.Title != other.Title:
+            lst.append("Title")
+        if self.Description != other.Description:
+            lst.append("Description")
+        if self.Comments != other.Comments:
+            lst.append("Comments")
         if self.Place != other.Place:
             lst.append("Place")
         if self.GPS != other.GPS:
@@ -278,6 +309,8 @@ class DamImage:
         if mytag != othertag:
             line += "\t'" + mytag + "'\t<>\t'" + othertag + "'"
         if orig_len < len(line):
+            line = line.replace("\r", "")
+            line = line.replace("\n", "\xB6")
             self._session.outfile.write(line + "\n")
 
     def SameMultiValueTags(self, d, other, tagcat, filter_list, filter_pairs):

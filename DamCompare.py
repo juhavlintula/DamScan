@@ -40,8 +40,10 @@ __doc__ = "This program compares metadata of items in two Daminion catalogs."
 #   0.5.0   – added support for INI file
 #   1.2.1   – sync the version numbering with DamScan.py
 #   1.3.0   – added support for exclude folders
+#   1.4.0   – added Title, Description and Comments
 
-alltags = ["Event", "Place", "GPS", "People", "Keywords", "Categories", "Collections"]
+alltags = ["Event", "Place", "GPS", "Title", "Description", "Comments", "People", "Keywords", "Categories",
+           "Collections"]
 
 
 def check_conf(conf):
@@ -227,7 +229,7 @@ def main():
     VerboseOutput = args.verbose
     if args.version or VerboseOutput > 0:
         print(__doc__)
-        print('*** Version', __version__, '***')
+        print(sys.argv[0], ' *** Version', __version__, '***')
         if not args.version:
             print('Scan started at {:%H:%M:%S}'.format(datetime.datetime.now()))
         else:

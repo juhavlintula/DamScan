@@ -47,7 +47,7 @@ class FilterPairs(dict):
 
     def __contains__(self, item):
         try:
-            if item[0] in ["Name", "Event", "Place", "GPS"]:
+            if item[0] in ["Name", "Event", "Place", "GPS", "Title", "Description", "Comments"]:
                 in_list = self[item[0]][item[1]][item[2]] == []
             else:
                 in_list = item[3] in self[item[0]][item[1]][item[2]]

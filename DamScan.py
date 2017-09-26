@@ -25,7 +25,7 @@ import configparser
 from Daminion.SessionParams import SessionParams
 from Daminion.DamCatalog import DamCatalog
 
-__version__ = "1.3.0"
+__version__ = "1.4.0"
 __doc__ = "This program is checking if all the linked or grouped items in a Daminion catalog have same tags."
 
 #   Version history
@@ -66,8 +66,10 @@ __doc__ = "This program is checking if all the linked or grouped items in a Dami
 #           – added support for Collections
 #   1.2.1   – fix for an empty Outfile parameter
 #   1.3.0   – some updates to INI file structure
+#   1.4.0   – added Title, Description and Comments
 
-alltags = ["Event", "Place", "GPS", "People", "Keywords", "Categories", "Collections"]
+alltags = ["Event", "Place", "GPS", "Title", "Description", "Comments", "People", "Keywords", "Categories",
+           "Collections"]
 
 def check_conf(conf):
     valid_config = {'Database': { 'sqlite': None, 'catalog': None, 'port': None, 'server': None, 'user': None },
@@ -174,7 +176,8 @@ def create_parser():
                         help="Print database id after the filename")
     parser.add_argument("-t", "--tags", dest="taglist", nargs='*', choices=alltags, #default=alltags,
                         help="Tag categories to be checked [all]. "
-                        "Allowed values for taglist are Event, Place, GPS, People, Keywords, Categories and Collections.")
+                        "Allowed values for taglist are Event, Place, GPS, Title, Description, Comments, People, "
+                        "Keywords, Categories and Collections.")
     group = parser.add_mutually_exclusive_group()
     group.add_argument("-x", "--excludetags","--exclude", dest="exfile",
                         help="Configuration file for tag values that are excluded from comparison.")
@@ -236,7 +239,7 @@ def ScanCatalog(catalog, session, verbose=0):
                     if curr_img.basename != f.basename and ("Name", curr_img._id, f._id) not in session.filter_pairs:
                         session.outfile.write(curr_img.ImageName + "\t<>\t" + f.ImageName + "\tName\n")
         for tag in taglist:
-            if tag in ["Event", "Place", "GPS"]:  # single value tags
+            if tag in ["Event", "Place", "GPS", "Title", "Description", "Comments"]:  # single value tags
                 for img in ToList:
                     curr_img.SameSingleValueTag(img, tag, exclude, session.filter_pairs)
             else:  # multi value tags
@@ -254,7 +257,7 @@ def main():
     VerboseOutput = args.verbose
     if args.version or VerboseOutput > 0:
         print(__doc__)
-        print('*** Version', __version__, '***')
+        print(sys.argv[0], ' *** Version', __version__, '***')
         if not args.version:
             print('Scan started at {:%H:%M:%S}'.format(datetime.datetime.now()))
         else:
