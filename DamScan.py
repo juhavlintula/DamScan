@@ -85,6 +85,15 @@ def check_conf(conf):
             if not valid_conf.has_option(sect,key):
                 sys.stderr.write("* Warning: INI file has an invalid option '{}':'{}' – Ignored\n".format(sect, key))
 
+def verifytags(taglist):
+    verified = []
+    for t in taglist:
+        if t in alltags:
+            verified.append(t)
+        else:
+            sys.stderr.write("* Warning: INI file has an invalid tag category '{}' – Ignored\n".format(t))
+    return verified
+
 def read_ini(args, conf):
     global alltags
 
@@ -125,6 +134,7 @@ def read_ini(args, conf):
             args.taglist = alltags
         else:
             args.taglist = taglist.split()
+            args.taglist = verifytags(args.taglist)
     if args.ack_pairs is None:
         args.ack_pairs = conf.get('Session', 'acknowledged', fallback=None)
     if args.exfile is None and args.onlyfile is None:
