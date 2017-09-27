@@ -109,7 +109,7 @@ class SessionParams:
             sys.stderr.write("*Warning: No item IDs – ignored: " + line + "\n")
             return []
 
-        if tag in ["Name", "Event", "Place", "GPS"]:
+        if tag in ["Name", "Event", "Place", "GPS", "Title", "Description", "Comments"]:
             return [tag, mi1, mi2, []]
         elif len(p) < 5:
             sys.stderr.write("*Ignored:" + line + "\n")
