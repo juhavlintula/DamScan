@@ -166,9 +166,9 @@ def set_Tk_var():
               analysis_type)  # for debugging
 
     populate_GUI_panel()
-    #    if int(rbtn_verbose_gui.get()) > 0:
-    # print('Func. set_Tk_var() line:', getframeinfo(currentframe()).lineno, "Var. analysis_type:",
-    #       analysis_type)  # for debugging
+    if int(rbtn_verbose_gui.get()) > 1:
+       print('Func. set_Tk_var() line:', getframeinfo(currentframe()).lineno,
+             "Var. analysis_type:", analysis_type)                              # for debugging
     return analysis_type
 
 
@@ -178,9 +178,6 @@ def read_ini(args, conf):
     if args.ini_file is not None and conf.read(args.ini_file.replace('"', '').replace(".ini", "") + ".ini",
                                                encoding='utf-8') == []:
         sys.stderr.write("INI File " + args.ini_file + " doesn't exist. Option ignored.\n")
-    #    check_conf(conf)
-    #     print('Function read_ini(args, conf):', getframeinfo(currentframe()).lineno,
-    #                  "args:",args, "conf:", conf)                                         # for debugging
 
     if args.sqlite is None:                         args.sqlite = conf.getboolean('Database', 'SQLite', fallback=False)
     if args.dbname is None:
@@ -223,9 +220,11 @@ def read_ini(args, conf):
         args.onlyfile = incf
 
     dirlist = conf.get('Session', 'OnlyPaths', fallback="")
-    if dirlist is not None:                             args.onlydir = shlex.split(dirlist, posix=False)  # DamCompare
-    # print('Function read_ini(args, conf):', getframeinfo(currentframe()).lineno,  # for debugging
-    #      "\ndirlist:", dirlist, "\nargs.onlydir:", args.onlydir, dirlist)
+    if dirlist is not None:
+        args.onlydir = shlex.split(dirlist, posix=False)  # DamCompare
+        # if int(rbtn_verbose_gui.get()) > 1:
+        # print('Function read_ini(args, conf):', getframeinfo(currentframe()).lineno,  # for debugging
+        #      "\ndirlist:", dirlist, "\nargs.onlydir:", args.onlydir, dirlist)
     if args.exdir is None:
         dirlist = conf.get('Session', 'ExcludePaths', fallback="")
         if dirlist is not None:                             args.exdir = shlex.split(dirlist)  # DamCompare
@@ -342,10 +341,12 @@ def populate_GUI_panel():  # Set Values to display at the GUI
                 '\ncreated on %d.%m.%Y %H:%M:%S')
             filechangedate = datetime.fromtimestamp(os.path.getmtime(args.dbname)).strftime(
                 'last changed on %d.%m.%Y %H:%M:%S')
-            print("Daminion catalog found: " + args.dbname, filecreatedate + ",", filechangedate)
+            if int(rbtn_verbose_gui.get()) > 0:
+                print("Daminion catalog found: " + args.dbname, filecreatedate + ",", filechangedate)
             txt_catalog_dates.set(filecreatedate + ", " + filechangedate)
         else:
-            print("Daminion catalog", args.dbname, "not found!")
+            if int(rbtn_verbose_gui.get()) > 0:
+                print("Daminion catalog", args.dbname, "not found!")
             txt_catalog_dates.set("Daminion catalog not found!")
 
     else:  # instead Postgresql (=server)
@@ -408,8 +409,9 @@ def populate_GUI_panel():  # Set Values to display at the GUI
     if args.onlydir is not None:
         if args.onlydir != []:
             txt_onlypaths.set('"' + '" "'.join(map(str, args.onlydir)) + '"')
-    # print('Function populate_GUI_panel():', getframeinfo(currentframe()).lineno,   # for debugging
-    #       " args:\n", args.onlydir, "\ntxt_onlypaths.get", txt_onlypaths.get())
+            if int(rbtn_verbose_gui.get()) > 1:
+                print('Function populate_GUI_panel():', getframeinfo(currentframe()).lineno,   # for debugging
+                  " args:\n", args.onlydir, "\ntxt_onlypaths.get", txt_onlypaths.get())
 
     if args.ack_pairs is not None:  # -a ACK_PAIRS, --acknowledged ACK_PAIRS File containing list of acknowledged differences.
         txt_ack_pairs.set(args.ack_pairs)
@@ -906,8 +908,9 @@ def run_compare_and_save_options(event=None):
 
 def toggle_sqlite(event=None, field=None):
     global rows
-    print('DamScanGUI_support.toggle_sqlite event:', event, field)
-    sys.stdout.flush()
+    if int(rbtn_verbose_gui.get()) > 0:
+        print('DamScanGUI_support.toggle_sqlite event:', event, field)
+        sys.stdout.flush()
 
     if event != None:
         if "FocusOut" in str(event) and "<ServerAttributes>" in field and (
@@ -1339,7 +1342,7 @@ def toggle_analysis_type(event=None):
     analysis_type = rbtn_analysis_type.get()  # read status of radio buttons
 
     if event != None:  # Accelerator key pressed
-        if event.keysym == "t":
+        if event.keysym in ("t","2"):
             analysis_type = 'Compare'  # Alt-Ctrl-t pressed (= compare "Two")
         else:
             analysis_type = 'Scan'  # Alt-Ctrl-s pressed (= scan "Single")
@@ -1349,11 +1352,9 @@ def toggle_analysis_type(event=None):
     if int(rbtn_verbose_gui.get()) > 1:
         print('Func. toggle_analysis_type():', getframeinfo(currentframe()).lineno)  # for debugging
     if int(rbtn_verbose_gui.get()) > 0:
-        print('DamScanGUI_support.toggle_analysis_type:', analysis_type)
+        print('DamScanGUI_support.toggle_analysis_type:', event, analysis_type)
         sys.stdout.flush()
 
-
-# print("DamScanGUI - Command line ",newArgString," built.")
 
 def init(top, gui, *args, **kwargs):
     global w, top_level, root

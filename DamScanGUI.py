@@ -135,7 +135,7 @@ class Analyze_Daminion_Catalog:
         self.txt_dbname.configure(textvariable=DamScanGUI_support.txt_dbname)
 
         self.txt_server = Entry(self.lbl_Daminion_Environment)
-        self.txt_server.place(relx=0.19, y=70, relheight=0.14, relwidth=0.24)   # !!!
+        self.txt_server.place(x=150, y=70, relheight=0.14, width=63)   # !!!
         self.txt_server.configure(background="white")
         self.txt_server.configure(disabledforeground="#a3a3a3")
         self.txt_server.configure(font=font10)
@@ -151,24 +151,8 @@ class Analyze_Daminion_Catalog:
         self.txt_server.bind('<FocusOut>', lambda e,f="<ServerAttributes>": DamScanGUI_support.toggle_sqlite(e, f))
         self.txt_server.bind('<Return>', lambda e,f="<ServerAttributes>": DamScanGUI_support.toggle_sqlite(e, f))
 
-        self.Colon_between_server_port = Label(self.lbl_Daminion_Environment)
-        self.Colon_between_server_port.place(relx=0.43, y=70, height=16, width=7)   # !!!
-        self.Colon_between_server_port.configure(activebackground="#ffffff")
-        self.Colon_between_server_port.configure(activeforeground="black")
-        self.Colon_between_server_port.configure(background="#ffffff")
-        self.Colon_between_server_port.configure(borderwidth="0")
-        self.Colon_between_server_port.configure(disabledforeground="#a3a3a3")
-        self.Colon_between_server_port.configure(font=font11)
-        self.Colon_between_server_port.configure(foreground="#000000")
-        self.Colon_between_server_port.configure(highlightbackground="#d9d9d9")
-        self.Colon_between_server_port.configure(highlightcolor="black")
-        self.Colon_between_server_port.configure(padx="0")
-        self.Colon_between_server_port.configure(pady="0")
-        self.Colon_between_server_port.configure(text=''':''')
-        self.Colon_between_server_port.configure(width=-9)                          # !!!
-
         self.txt_port = Entry(self.lbl_Daminion_Environment)
-        self.txt_port.place(relx=0.44, y=70, relheight=0.14, relwidth=0.05)         # !!!
+        self.txt_port.place(x=215, y=70, relheight=0.14, width=60)         # !!!
         self.txt_port.configure(background="white")
         self.txt_port.configure(disabledforeground="#a3a3a3")
         self.txt_port.configure(font=font10)
@@ -183,6 +167,13 @@ class Analyze_Daminion_Catalog:
         self.txt_port.bind('<FocusOut>', lambda e,f="<ServerAttributes>": DamScanGUI_support.toggle_sqlite(e, f))
         self.txt_port.bind('<Return>', lambda e,f="<ServerAttributes>": DamScanGUI_support.toggle_sqlite(e, f))
 
+        self.Colon_between_server_port = Label(self.lbl_Daminion_Environment)
+        self.Colon_between_server_port.place(x=210, y=70, height=16, width=7)   # !!!
+        self.Colon_between_server_port.configure(background="#ffffff")
+        self.Colon_between_server_port.configure(font=font11)
+        self.Colon_between_server_port.configure(foreground="#000000")
+        self.Colon_between_server_port.configure(text=''':''')
+
         self.Postgres_User__Password = Label(self.lbl_Daminion_Environment)
         self.Postgres_User__Password.place(relx=0.01, y=90, height=20, width=120)   # !!
         self.Postgres_User__Password.configure(activebackground="#f9f9f9")
@@ -193,10 +184,10 @@ class Analyze_Daminion_Catalog:
         self.Postgres_User__Password.configure(foreground="#000000")
         self.Postgres_User__Password.configure(highlightbackground="#d9d9d9")
         self.Postgres_User__Password.configure(highlightcolor="black")
-        self.Postgres_User__Password.configure(text='''User, Password''')
+        self.Postgres_User__Password.configure(text='''User/Password''')
 
         self.txt_user = Entry(self.lbl_Daminion_Environment)
-        self.txt_user.place(relx=0.19, y=90, relheight=0.14, relwidth=0.15)                 # !!!
+        self.txt_user.place(x=150, y=90, relheight=0.14, width=63)                 # !!!
         self.txt_user.configure(background="white")
         self.txt_user.configure(disabledforeground="#a3a3a3")
         self.txt_user.configure(font=font10)
@@ -205,6 +196,7 @@ class Analyze_Daminion_Catalog:
         self.txt_user.configure(highlightcolor="black")
         self.txt_user.configure(insertbackground="black")
         self.txt_user.configure(relief=FLAT)
+        self.txt_user.configure(justify=RIGHT)
         self.txt_user.configure(selectbackground="#c4c4c4")
         self.txt_user.configure(selectforeground="black")
         self.txt_user.configure(textvariable=DamScanGUI_support.txt_user)
@@ -212,7 +204,7 @@ class Analyze_Daminion_Catalog:
         self.txt_user.bind('<Return>', lambda e, f="<ServerAttributes>": DamScanGUI_support.toggle_sqlite(e, f))
 
         self.txt_password = Entry(self.lbl_Daminion_Environment)
-        self.txt_password.place(relx=0.34, y=90, relheight=0.14, relwidth=0.15)             # !!!
+        self.txt_password.place(x=215, y=90, height=16, width=60)             # !!!
         self.txt_password.configure(background="white")
         self.txt_password.configure(disabledforeground="#a3a3a3")
         self.txt_password.configure(font=font10)
@@ -223,10 +215,17 @@ class Analyze_Daminion_Catalog:
         self.txt_password.configure(relief=FLAT)
         self.txt_password.configure(selectbackground="#c4c4c4")
         self.txt_password.configure(selectforeground="black")
-        self.txt_password.configure(show="*")
+        self.txt_password.configure(show="x")
         self.txt_password.configure(textvariable=DamScanGUI_support.txt_password)
         self.txt_password.bind('<FocusOut>', lambda e,f="<ServerAttributes>": DamScanGUI_support.toggle_sqlite(e, f))
         self.txt_password.bind('<Return>', lambda e,f="<ServerAttributes>": DamScanGUI_support.toggle_sqlite(e, f))
+
+        self.slash_between_server_port = Label(self.lbl_Daminion_Environment)
+        self.slash_between_server_port.place(x=210, y=90, height=16, width=8)   # !!!
+        self.slash_between_server_port.configure(background="#ffffff")
+        self.slash_between_server_port.configure(font=font10)
+        self.slash_between_server_port.configure(foreground="#000000")
+        self.slash_between_server_port.configure(text='''/''')
 
         self.btn_browse_dmc_1 = Button(self.lbl_Daminion_Environment)
         self.btn_browse_dmc_1.place(relx=0.96, y=0, height=20, width=20)    # !!!
@@ -1550,7 +1549,7 @@ if checked here, but mask below is empty)''')
         self.rbtn_analysis_type1.configure(highlightbackground="#d9d9d9")
         self.rbtn_analysis_type1.configure(highlightcolor="black")
         self.rbtn_analysis_type1.configure(justify=LEFT)
-        self.rbtn_analysis_type1.configure(text='''Scan Single (Alt+Ctrl+s)''')
+        self.rbtn_analysis_type1.configure(text='''Scan Daminion Catalog for Inconsistent Groups/Links (Ctrl+1)''')
         self.rbtn_analysis_type1.configure(underline="0")
         self.rbtn_analysis_type1.configure(value="Scan")
         self.rbtn_analysis_type1.configure(variable=DamScanGUI_support.rbtn_analysis_type)
@@ -1566,7 +1565,7 @@ if checked here, but mask below is empty)''')
         self.rbtn_analysis_type_compare1.configure(highlightbackground="#d9d9d9")
         self.rbtn_analysis_type_compare1.configure(highlightcolor="black")
         self.rbtn_analysis_type_compare1.configure(justify=LEFT)
-        self.rbtn_analysis_type_compare1.configure(text='''Compare Two Catalogs (Alt+Ctrl+t)''')
+        self.rbtn_analysis_type_compare1.configure(text='''Compare Two Daminion Catalogs (Ctrl+2)''')
         self.rbtn_analysis_type_compare1.configure(underline="8")           #!! underline="8"
         self.rbtn_analysis_type_compare1.configure(value="Compare")
         self.rbtn_analysis_type_compare1.configure(variable=DamScanGUI_support.rbtn_analysis_type)
@@ -1626,9 +1625,9 @@ if checked here, but mask below is empty)''')
         top.bind('<Control-X>', DamScanGUI_support.browse_for_excluded_tag_value_lists) # Ctrl+Shift+X
         top.bind('<Alt-Control-y>', DamScanGUI_support.browse_only_paths)
         top.bind('<Control-Y>', DamScanGUI_support.browse_for_only_tag_value_lists)     # Ctrl+Shift+Y
-        top.bind('<Control-Key-1>', DamScanGUI_support.run_analysis_no_save)
+        top.bind('<Control-Key-1>', DamScanGUI_support.toggle_analysis_type)
         top.bind('<Alt-Key-1>', DamScanGUI_support.run_analysis_no_save)
-        top.bind('<Control-Key-2>', DamScanGUI_support.run_damcompare_no_save)
+        top.bind('<Control-Key-2>', DamScanGUI_support.toggle_analysis_type)
         top.bind('<Alt-Key-2>', DamScanGUI_support.run_compare_and_save_options)
 
 # The following code is added to facilitate the Scrolled widgets you specified.
