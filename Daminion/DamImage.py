@@ -131,7 +131,8 @@ class DamImage:
             lat = row[0]
             long = row[1]
             alt = row[2]
-        GPSstring = "{}N {}E {}m".format(lat, long, alt)
+        gps_precision = 8
+        GPSstring = "{0:.{3}f}N {1:.{3}f}E {2:.{3}f}m".format(lat, long, alt, gps_precision)
         return GPSstring
 
     @staticmethod

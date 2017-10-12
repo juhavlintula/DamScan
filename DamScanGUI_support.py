@@ -548,11 +548,11 @@ def read_config_for_gui(newdamscanini):
     RecentDamScanINIfiles = shlex.split(configGUI['DamScanGUI_INI']['RecentDamScanINIfiles'].replace('.ini', ''))
     lstb_recent_ini_files.set(RecentDamScanINIfiles)
     if newdamscanini is not None:
-        args.ini_file = newdamscanini.strip(".ini")+".ini"  # Other INI selected in GUI
+        args.ini_file = newdamscanini  # Other INI selected in GUI
     else:
         args.ini_file = RecentDamScanINIfiles[0]  # otherwise take last recently used
 
-    if args.ini_file != None:
+    if args.ini_file is None:
         args.ini_file = "DamScan.ini"  # or Default
         newdamscanini = args.ini_file
 
@@ -568,7 +568,7 @@ def read_config_for_gui(newdamscanini):
     try:  # ????
         testforinifile = open(args.ini_file)
     except IOError:
-        print("INI file", args.ini_file, " does not exist")
+        print("INI file", args.ini_file, "does not exist")
         return
 
     newdamscanini = os.path.basename(testforinifile.name)
@@ -815,8 +815,7 @@ def edit_only_file():
     res = subprocess.Popen("notepad.exe " + txt_onlyfile.get())
 
 
-def open_output_file_in_excel(
-        event=None):  # Don't know, why I need to specify the path for excel. Works without path in command entry
+def open_output_file_in_excel(event=None):  # Don't know, why I need to specify the path for excel. Works without path in command entry
     print('DamScanGUI_support.open_output_file_in_excel')
     sys.stdout.flush()
     res = subprocess.Popen(
