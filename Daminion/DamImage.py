@@ -16,12 +16,14 @@
 #   You should have received a copy of the GNU General Public License
 #   along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
-#
+#   23Oct2017: Suggested addition to calculate distance in meters between two GPS coordinates, marked with ->   # WBL
 
 import sys
 import sqlite3
 import psycopg2
 import psycopg2.extensions
+
+from math import cos, asin, sqrt                                                                                # WBL
 
 imagefiletypekey = ["%7jnbapuim4$lwk:d45bb3b6-b441-435c-a3ec-b27d067b7c53",
                     "%7jnbapuim4$lwk:343f9214-79a7-4b58-96a3-b7838e3e37ee"]  # magic keys from database
@@ -131,9 +133,9 @@ class DamImage:
             lat = row[0]
             long = row[1]
             alt = row[2]
-        gps_precision = 8
-        GPSstring = "{0:.{3}f}N {1:.{3}f}E {2:.{3}f}m".format(lat, long, alt, gps_precision)
-        return GPSstring
+        GPSstring = "{}N {}E {}m".format(lat, long, alt)
+        return GPSstring, lat, long, alt   # Return coordinates for later calculation                           # WBL
+
 
     @staticmethod
     def _none_to_str(s):
@@ -181,7 +183,7 @@ class DamImage:
             self.Comments = ""
         else:
             self.Place = self._get_place(cur, self._id, filename, self._db.PlaceList)
-            self.GPS = self._get_GPS(cur, self._id)
+            self.GPS, self.lat, self.long, self.alt = self._get_GPS(cur, self._id)                              # WBL
             self.Title, self.Description, self.Comments = self._get_subject(cur, self._id)
 
             # get list of People, Keywords and Categories
@@ -213,7 +215,27 @@ class DamImage:
         if self.Place != other.Place:
             lst.append("Place")
         if self.GPS != other.GPS:
-            lst.append("GPS")
+
+            other_lat  = float(other.lat)                                                  # WBL    Calculate
+            other_long = float(other.long)                                                 # WBL    distance in mtr
+            other_alt  = float(other.alt)                                                  # WBL    between
+            delta_lat  = other_lat  - self.lat                                             # WBL    two
+            delta_long = other_long - self.long                                            # WBL    GPS coordinates
+            delta_alt  = other_alt  - self.alt                                             # WBL
+
+# Calculate the distance of two points defined by latitude and longitude
+# Formular taken from:
+# https://stackoverflow.com/questions/27928/calculate-distance-between-two-latitude-longitude-points-haversine-formula
+            p = 0.017453292519943295  # Pi/180                                              # WBL
+            a = 0.5 - cos(delta_lat*p) / 2 + cos(self.lat*p) * cos(other_lat*p) * (1 - cos(delta_long*p))/2  # WBL
+            distance = 12.742 * asin(sqrt(a))           # distance in meter!                # WBL
+
+            if distance > 1.0 or delta_alt > 0.0:       # report only when distance > 1 m   # WBL
+                lst.append("GPS")                       # or different altitude >0 m        # WBL
+                lst.append(str(distance)+" m distance" )                                    # WBL
+                if delta_alt > 0:                                                           # WBL
+                    lst.append(str(delta_alt)+" m elev. difference")                        # WBL
+
         if self.Event != other.Event:
             lst.append("Event")
         if sorted(self.People) != sorted(other.People):
