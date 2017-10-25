@@ -25,7 +25,7 @@ import configparser
 from Daminion.SessionParams import SessionParams
 from Daminion.DamCatalog import DamCatalog
 
-__version__ = "1.4.0"
+__version__ = "1.5.0"
 __doc__ = "This program is checking if all the linked or grouped items in a Daminion catalog have same tags."
 
 #   Version history
@@ -67,6 +67,7 @@ __doc__ = "This program is checking if all the linked or grouped items in a Dami
 #   1.2.1   – fix for an empty Outfile parameter
 #   1.3.0   – some updates to INI file structure
 #   1.4.0   – added Title, Description and Comments
+#   1.5.0   - added support to GPS precision (based on Wilfried's changes
 
 alltags = ["Event", "Place", "GPS", "Title", "Description", "Comments", "People", "Keywords", "Categories",
            "Collections"]
@@ -75,7 +76,7 @@ def check_conf(conf):
     valid_config = {'Database': { 'sqlite': None, 'catalog': None, 'port': None, 'server': None, 'user': None },
                   'Session': { 'fullpath': None, 'id': None, 'group': None, 'basename': None, 'tags': None,
                                'acknowledged': None, 'excludetags': None, 'onlytags': None,
-                               'outfile': None, 'verbose': None,
+                               'gps_dist': None, 'gps_alt': None, 'outfile': None, 'verbose': None,
                                'exclude': None, 'only': None }}
 
     valid_conf = configparser.ConfigParser(allow_no_value=True)
@@ -155,6 +156,11 @@ def read_ini(args, conf):
         args.exfile = excf
         args.onlyfile = incf
 
+    if args.dist_tolerance is None:
+        args.dist_tolerance = conf.getfloat('Session', 'GPS_dist', fallback=0.0)
+    if args.alt_tolerance is None:
+        args.alt_tolerance = conf.getfloat('Session', 'GPS_alt', fallback=0.0)
+
     if args.outfilename is None:
         file = conf.get('Session', 'Outfile', fallback=None)
     else:
@@ -195,6 +201,10 @@ def create_parser():
                         help="Configuration file for tag values that are only used for comparison.")
     parser.add_argument("-a", "--acknowledged", dest="ack_pairs",
                        help="File containing list of acknowledged differences.")
+    parser.add_argument("--GPS_dist", dest="dist_tolerance", type=float, default=None,
+                        help="Allowed GPS distance tolerance")
+    parser.add_argument("--GPS_alt", dest="alt_tolerance", type=float, default=None,
+                        help="Allowed GPS height tolerance")
     parser.add_argument("-v", "--verbose", action="count", dest="verbose", #default=0,
                         help="verbose output (always into stdout)")
     parser.add_argument("-b", "--basename", dest="basename", nargs='*', metavar="SEPARATOR",
@@ -292,7 +302,8 @@ def main():
     else:
         file = args.onlyfile
     session = SessionParams(args.taglist, args.fullpath, args.id, args.group, args.basename,
-                            args.onlyfile == file, file, args.ack_pairs, outfile=args.outfile)
+                            args.onlyfile == file, file, args.ack_pairs, args.dist_tolerance, args.alt_tolerance,
+                            outfile=args.outfile)
     #       For verbose print the filter list
     if VerboseOutput > 0:
         line = "Tags that are"

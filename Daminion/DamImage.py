@@ -130,9 +130,9 @@ class DamImage:
             long = 0.0
             alt = 0.0
         else:
-            lat = row[0]
-            long = row[1]
-            alt = row[2]
+            lat = float(row[0])
+            long = float(row[1])
+            alt = float(row[2])
         GPSstring = "{}N {}E {}m".format(lat, long, alt)
         return GPSstring, lat, long, alt   # Return coordinates for later calculation                           # WBL
 
@@ -174,6 +174,9 @@ class DamImage:
         if self.IsDeleted:
             self.Place = ""
             self.GPS = ""
+            self.lat = 0.0
+            self.long = 0.0
+            self.alt = 0.0
             self.People = []
             self.Keywords =[]
             self.Categories = []
@@ -196,7 +199,23 @@ class DamImage:
                                                        self._db.CollectionList)
         cur.close()
 
-    def image_eq(self, other):
+    def image_dist(self, other):
+#        other_lat = float(other.lat)  # WBL    Calculate
+#        other_long = float(other.long)  # WBL    distance in mtr
+#        other_alt = float(other.alt)  # WBL    between
+        delta_lat = other.lat - self.lat  # WBL    two
+        delta_long = other.long - self.long  # WBL    GPS coordinates
+        delta_alt = other.alt - self.alt  # WBL
+
+        # Calculate the distance of two points defined by latitude and longitude
+        # Formular taken from:
+        # https://stackoverflow.com/questions/27928/calculate-distance-between-two-latitude-longitude-points-haversine-formula
+        p = 0.017453292519943295  # Pi/180                                              # WBL
+        a = 0.5 - cos(delta_lat * p) / 2 + cos(self.lat * p) * cos(other.lat * p) * (1 - cos(delta_long * p)) / 2  # WBL
+        distance = 12.742 * asin(sqrt(a))  # distance in meter!                # WBL
+        return distance, delta_alt
+
+    def image_eq(self, other, dist_tolerance, alt_tolerance):
         if other is None or other.IsDeleted:
             return False, ["ERROR: file missing"]
         lst = []
@@ -215,27 +234,15 @@ class DamImage:
         if self.Place != other.Place:
             lst.append("Place")
         if self.GPS != other.GPS:
-
-            other_lat  = float(other.lat)                                                  # WBL    Calculate
-            other_long = float(other.long)                                                 # WBL    distance in mtr
-            other_alt  = float(other.alt)                                                  # WBL    between
-            delta_lat  = other_lat  - self.lat                                             # WBL    two
-            delta_long = other_long - self.long                                            # WBL    GPS coordinates
-            delta_alt  = other_alt  - self.alt                                             # WBL
-
-# Calculate the distance of two points defined by latitude and longitude
-# Formular taken from:
-# https://stackoverflow.com/questions/27928/calculate-distance-between-two-latitude-longitude-points-haversine-formula
-            p = 0.017453292519943295  # Pi/180                                              # WBL
-            a = 0.5 - cos(delta_lat*p) / 2 + cos(self.lat*p) * cos(other_lat*p) * (1 - cos(delta_long*p))/2  # WBL
-            distance = 12.742 * asin(sqrt(a))           # distance in meter!                # WBL
-
-            if distance > 1.0 or delta_alt > 0.0:       # report only when distance > 1 m   # WBL
-                lst.append("GPS")                       # or different altitude >0 m        # WBL
-                lst.append(str(distance)+" m distance" )                                    # WBL
-                if delta_alt > 0:                                                           # WBL
-                    lst.append(str(delta_alt)+" m elev. difference")                        # WBL
-
+            if dist_tolerance > 0.0 or alt_tolerance > 0.0:
+                distance, delta_alt = self.image_dist(other)
+                if distance > dist_tolerance or delta_alt > alt_tolerance:       # report only when distance > tolerance   # WBL
+                    lst.append("GPS")                       # or different altitude >0 m        # WBL
+#                   lst.append(str(distance)+" m distance" )                                    # WBL
+#                   if delta_alt > 0:                                                           # WBL
+#                        lst.append(str(delta_alt)+" m elev. difference")                       # WBL
+            else:
+                lst.append("GPS")
         if self.Event != other.Event:
             lst.append("Event")
         if sorted(self.People) != sorted(other.People):

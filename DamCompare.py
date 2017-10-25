@@ -27,7 +27,7 @@ from Daminion.SessionParams import SessionParams
 from Daminion.DamCatalog import DamCatalog
 from Daminion.DamImage import DamImage, get_image_by_name
 
-__version__ = "1.3.0"
+__version__ = "1.5.0"
 __doc__ = "This program compares metadata of items in two Daminion catalogs."
 
 #   Version history
@@ -41,6 +41,7 @@ __doc__ = "This program compares metadata of items in two Daminion catalogs."
 #   1.2.1   – sync the version numbering with DamScan.py
 #   1.3.0   – added support for exclude folders
 #   1.4.0   – added Title, Description and Comments
+#   1.5.0   - added support to GPS precision (based on Wilfried's changes
 
 alltags = ["Event", "Place", "GPS", "Title", "Description", "Comments", "People", "Keywords", "Categories",
            "Collections"]
@@ -50,7 +51,7 @@ def check_conf(conf):
     valid_config = {'Database': { 'sqlite': None, 'catalog1': None, 'catalog2': None, 'port': None, 'server': None,
                                   'user': None },
                   'Session': { 'fullpath': None, 'id': None, 'excludepaths': None, 'onlypaths': None,'outfile': None,
-                               'verbose': None, 'exclude': None, 'only': None}}
+                               'gps_dist': None, 'gps_alt': None, 'verbose': None, 'exclude': None, 'only': None}}
 
     valid_conf = configparser.ConfigParser(allow_no_value=True)
     valid_conf.read_dict(valid_config)
@@ -84,7 +85,12 @@ def read_ini(args, conf):
     if args.id is None:
         args.id = conf.getboolean('Session', 'ID', fallback=False)
 
-#   if args.taglist is None:
+    if args.dist_tolerance is None:
+        args.dist_tolerance = conf.getfloat('Session', 'GPS_dist', fallback=0.0)
+    if args.alt_tolerance is None:
+        args.alt_tolerance = conf.getfloat('Session', 'GPS_alt', fallback=0.0)
+
+    #   if args.taglist is None:
 #       taglist = conf.get('Session', 'Tags', fallback=None)
 #       if taglist is None or taglist.lower()=="all":
 #           args.taglist = alltags
@@ -145,6 +151,10 @@ def create_parser():
     #   parser.add_argument("-t", "--tags", dest="taglist", nargs='*', choices=alltags, #default=alltags,
     #                    help="Tag categories to be checked [all]. "
     #                    "Allowed values for taglist are Event, Place, GPS, People, Keywords, Categories and Collections.")
+    parser.add_argument("--GPS_dist", dest="dist_tolerance", type=float, default=None,
+                        help="Allowed GPS distance tolerance")
+    parser.add_argument("--GPS_alt", dest="alt_tolerance", type=float, default=None,
+                        help="Allowed GPS height tolerance")
     group = parser.add_mutually_exclusive_group()
     group.add_argument("-x", "--excludepaths", "--exclude", dest="exdir", nargs='+',
                         help="List of folder paths that are excluded from comparison.")
@@ -180,7 +190,7 @@ def create_parser():
     return parser, conf
 
 def compare_image(img1, img2, session):
-    same, tags = img1.image_eq(img2)
+    same, tags = img1.image_eq(img2, session.dist_tolerance, session.alt_tolerance)
     if img2 == None or not same:
         if img2 == None:
             name2 = "–"
@@ -260,7 +270,9 @@ def main():
     line += '\n'
     args.outfile.write(line)
 
-    session = SessionParams(None, args.fullpath, args.id, exdir=args.exdir, onlydir=args.onlydir,
+    session = SessionParams(None, args.fullpath, args.id,
+                            dist_tolerance=args.dist_tolerance, alt_tolerance=args.alt_tolerance,
+                            exdir=args.exdir, onlydir=args.onlydir,
                             outfile=args.outfile)
 
     ScanCatalog(catalog1, catalog2, session, VerboseOutput)

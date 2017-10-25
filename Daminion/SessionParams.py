@@ -141,7 +141,8 @@ class SessionParams:
         return pairs
 
     def __init__(self, tag_cat_list=[], fullpath=False, print_id=False, group=False, comp_name=None,
-                 only_tags=False, tagvaluefile=None, filter_pairs=None, exdir=[], onlydir=[], outfile=sys.stdout):
+                 only_tags=False, tagvaluefile=None, filter_pairs=None, dist_tolerance=0.0, alt_tolerance=0.0,
+                 exdir=[], onlydir=[], outfile=sys.stdout):
         self.fullpath = fullpath
         self.print_id = print_id
         self.group = group
@@ -149,6 +150,8 @@ class SessionParams:
         self.tag_cat_list = tag_cat_list
         self.filter_list = FilterTags(tagvaluefile, only_tags)
         self.filter_pairs = self.read_pairs(filter_pairs)
+        self.dist_tolerance = dist_tolerance
+        self.alt_tolerance = alt_tolerance
         if exdir is None:
             self.exdir = []
         else:
