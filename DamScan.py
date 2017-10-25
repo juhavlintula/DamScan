@@ -261,7 +261,8 @@ def ScanCatalog(catalog, session, verbose=0):
         for tag in taglist:
             if tag in ["Event", "Place", "GPS", "Title", "Description", "Comments"]:  # single value tags
                 for img in ToList:
-                    curr_img.SameSingleValueTag(img, tag, exclude, session.filter_pairs)
+                    curr_img.SameSingleValueTag(img, tag, exclude, session.filter_pairs, session.dist_tolerance,
+                                                session.alt_tolerance)
             else:  # multi value tags
                 for img in ToList:
                     curr_img.SameMultiValueTags(">", img, tag, exclude, session.filter_pairs)

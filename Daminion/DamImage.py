@@ -205,14 +205,14 @@ class DamImage:
 #        other_alt = float(other.alt)  # WBL    between
         delta_lat = other.lat - self.lat  # WBL    two
         delta_long = other.long - self.long  # WBL    GPS coordinates
-        delta_alt = other.alt - self.alt  # WBL
+        delta_alt = abs(other.alt - self.alt)  # WBL
 
         # Calculate the distance of two points defined by latitude and longitude
         # Formular taken from:
         # https://stackoverflow.com/questions/27928/calculate-distance-between-two-latitude-longitude-points-haversine-formula
         p = 0.017453292519943295  # Pi/180                                              # WBL
         a = 0.5 - cos(delta_lat * p) / 2 + cos(self.lat * p) * cos(other.lat * p) * (1 - cos(delta_long * p)) / 2  # WBL
-        distance = 12.742 * asin(sqrt(a))  # distance in meter!                # WBL
+        distance = 12742000 * asin(sqrt(a))  # distance in meter!                # WBL
         return distance, delta_alt
 
     def image_eq(self, other, dist_tolerance, alt_tolerance):
@@ -236,11 +236,8 @@ class DamImage:
         if self.GPS != other.GPS:
             if dist_tolerance > 0.0 or alt_tolerance > 0.0:
                 distance, delta_alt = self.image_dist(other)
-                if distance > dist_tolerance or delta_alt > alt_tolerance:       # report only when distance > tolerance   # WBL
+                if distance > dist_tolerance or delta_alt > alt_tolerance:  # report only when distance > tolerance   # WBL
                     lst.append("GPS")                       # or different altitude >0 m        # WBL
-#                   lst.append(str(distance)+" m distance" )                                    # WBL
-#                   if delta_alt > 0:                                                           # WBL
-#                        lst.append(str(delta_alt)+" m elev. difference")                       # WBL
             else:
                 lst.append("GPS")
         if self.Event != other.Event:
@@ -327,7 +324,7 @@ class DamImage:
         tags = getattr(self, tag)
         return tags
 
-    def SameSingleValueTag(self, other, tagcat, filter_list, filter_pairs):
+    def SameSingleValueTag(self, other, tagcat, filter_list, filter_pairs, dist, alt):
         mytag = self.GetTags(tagcat)
         othertag = other.GetTags(tagcat)
         pair = (tagcat, self._id, other._id) in filter_pairs
@@ -337,7 +334,15 @@ class DamImage:
         line = self.ImageName + "\t<>\t" + other.ImageName + "\t" + tagcat
         orig_len = len(line)
         if mytag != othertag:
-            line += "\t'" + mytag + "'\t<>\t'" + othertag + "'"
+            if tagcat == "GPS":
+                lat_dist, alt_dist = self.image_dist(other)
+                if lat_dist > dist or alt_dist > alt:
+                    line += "\t'" + mytag + "'\t<>\t"
+                    line += "'" + u"\u0394" + " {}m".format(lat_dist) + ", " +\
+                            u"\u0394" + "h {}m".format(alt_dist) + "'"
+                pass
+            else:
+                line += "\t'" + mytag + "'\t<>\t'" + othertag + "'"
         if orig_len < len(line):
             line = line.replace("\r", "")
             line = line.replace("\n", "\xB6")
