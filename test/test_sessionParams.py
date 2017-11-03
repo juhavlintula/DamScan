@@ -1,7 +1,8 @@
 from unittest import TestCase
-from Daminion.SessionParams import SessionParams
+from Daminion.SessionParams import SessionParams, FilterTags
 import io
 import sys
+from unittest.mock import patch
 
 
 def create_test_ini_file(name):
@@ -9,8 +10,7 @@ def create_test_ini_file(name):
     fd.write("n1 (1)\t<>\tn2 (2)\tPlace\tFinland\n"
              "n1 (1)\t<>\tn2 (2)\tPlace\tSweden\n"
              "n3 (3)\t<>\tn4 (4)\tPlace\tSweden\n"
-             "n3 (3)\t<>\tn4 (4)\tPeople\t'A', 'B'\n"
-             "n3 (3)\t<>\tn4 (4)\tPeople\t'C', 'D'\n")
+             "n3 (3)\t<>\tn4 (4)\tPeople\t'A', 'B'\n")
     fd.close()
 
 class TestSessionParams(TestCase):
@@ -29,7 +29,7 @@ class TestSessionParams(TestCase):
         sys.stderr = fd
 
         self.assertEqual(SessionParams.parse_line(""), [])
-        self.assertCountEqual(SessionParams.parse_line("n1 (1)\t<>\tn2 (2)\tPlace\tTampere"),
+        self.assertCountEqual(SessionParams.parse_line(("n1 (1)\t<>\tn2 (2)\tPlace\tTampere")),
                               ["Place", 1, 2, []])
         self.assertCountEqual(SessionParams.parse_line("n1 (1)\t<\tn2 (2)\tPeople\t'A', 'B', 'C'"),
                               ["People", 1, 2, ["A", "B", "C"]])
@@ -68,6 +68,8 @@ class TestSessionParams(TestCase):
         create_test_ini_file("test/test_pairs.ini")
         p = SessionParams.read_pairs("test/test_pairs.ini")
         self.assertCountEqual(p, pairs)
+        p = SessionParams.read_pairs(None)
+        self.assertEqual(p, {})
 
         fd = io.StringIO()
         pos = 0
@@ -83,3 +85,29 @@ class TestSessionParams(TestCase):
         fd.close()
         sys.stderr = tmp
 
+
+    @patch('Daminion.SessionParams.FilterTags')
+    @patch('Daminion.SessionParams.SessionParams.read_pairs')
+    def test__init(self, m_pairs, m_list):
+        tag_cat_list = ['tagcat_a', 'tagcat_b']
+        ex_dir = ['2011', '2012']
+        only_dir = ['2013, 2014']
+
+        s = SessionParams(tag_cat_list, True, True, True, ['_'], True, "tagvaluefile", "pairsfile",
+                          1.0, 1.0, ex_dir, only_dir, sys.stderr)
+        self.assertCountEqual(s.tag_cat_list, tag_cat_list)
+        self.assertTrue(s.fullpath)
+        self.assertTrue(s.print_id)
+        self.assertTrue(s.group)
+        self.assertEqual(s.comp_name, ['_'])
+        m_pairs.assert_called_once_with("pairsfile")
+        m_list.assert_called_once_with("tagvaluefile", True)
+        self.assertEqual(s.dist_tolerance, 1.0)
+        self.assertEqual(s.alt_tolerance, 1.0)
+        self.assertCountEqual(s.exdir, ex_dir)
+        self.assertCountEqual(s.onlydir, only_dir)
+        self.assertEqual(s.outfile, sys.stderr)
+
+        s = SessionParams(exdir=None, onlydir=None)
+        self.assertEqual(s.exdir, [])
+        self.assertEqual(s.onlydir, [])
