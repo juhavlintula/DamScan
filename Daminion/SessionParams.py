@@ -98,6 +98,9 @@ class SessionParams:
 
     @staticmethod
     def parse_line(line):
+        if line == "":
+            return []
+
         p = line.split('\t')
         if len(p) < 4:
             sys.stderr.write("*Warning: Invalid line – ignored: " + line + "\n")
@@ -130,10 +133,9 @@ class SessionParams:
                     l = f.readline()
                     while l != "":
                         l = l.rstrip()
-                        if l != "":
-                            p = SessionParams.parse_line(l)
-                            if p != []:
-                                pairs.nested_set(p[0:3], p[3], append=True)
+                        p = SessionParams.parse_line(l)
+                        if p != []:
+                            pairs.nested_set(p[0:3], p[3], append=True)
                         l = f.readline()
             else:
                 sys.stderr.write(filename + " doesn't exist. Option -a ignored.\n")

@@ -1,5 +1,4 @@
 from unittest import TestCase
-import unittest
 from Daminion.SessionParams import FilterTags
 import sys
 import io
@@ -11,6 +10,7 @@ def create_test_ini_file(name):
              "domestic|cat\n"
              "domestic|dog:schäfer\n")
     fd.close()
+
 
 class TestFilterTags(TestCase):
 
