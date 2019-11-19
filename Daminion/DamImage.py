@@ -17,6 +17,7 @@
 #   along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 #   23Oct2017: Suggested addition to calculate distance in meters between two GPS coordinates, marked with ->   # WBL
+#   19Nov2019: Ignore difference in milliseconds, when comparing creation time
 
 import sys
 import sqlite3
@@ -223,6 +224,10 @@ class DamImage:
 #            lst.append("Filename")
 #        if self._ImagePath != other._ImagePath:
 #            lst.append("Path")
+#       If the creation time is changed in Daminion, it drops milliseconds from its database
+#       but leaves them in EXIF data. Drop the milliseconds, so they don't generate false positives
+        self.creationtime = self.creationtime.replace(microsecond=0)
+        other.creationtime = other.creationtime.replace(microsecond=0)
         if self.creationtime != other.creationtime:
             lst.append("Creation Time")
         if self.Title != other.Title:

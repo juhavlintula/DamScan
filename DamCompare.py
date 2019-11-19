@@ -27,7 +27,7 @@ from Daminion.SessionParams import SessionParams
 from Daminion.DamCatalog import DamCatalog
 from Daminion.DamImage import DamImage, get_image_by_name
 
-__version__ = "1.5.0"
+__version__ = "1.5.1"
 __doc__ = "This program compares metadata of items in two Daminion catalogs."
 
 #   Version history
@@ -42,6 +42,7 @@ __doc__ = "This program compares metadata of items in two Daminion catalogs."
 #   1.3.0   – added support for exclude folders
 #   1.4.0   – added Title, Description and Comments
 #   1.5.0   - added support to GPS precision (based on Wilfried's changes
+#   1.5.1   - ignore milliseconds in creation time comparison
 
 alltags = ["Event", "Place", "GPS", "Title", "Description", "Comments", "People", "Keywords", "Categories",
            "Collections"]
