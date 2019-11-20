@@ -21,6 +21,7 @@
 
 import sys
 import sqlite3
+from datetime import datetime
 import psycopg2
 import psycopg2.extensions
 
@@ -105,7 +106,19 @@ class DamImage:
         else:
             isimage = False
             sys.stderr.write("***ERROR: Invalid Media format in id: {}, image: {}\n".format(img_id, filename))
-        return event, isimage, isdeleted, row[3]
+        if isinstance(cur, sqlite3.Cursor):
+            if len(row[3]) < 19:
+                sys.stderr.write("***ERROR: Invalid creation time id: {}, image: {}, time: {}\n".format(
+                    img_id, filename, row[3]))
+                time = datetime.today()
+            elif len(row[3]) > 19:   # ensure all there is exactly six decimals
+                t_str = row[3] + "000000"
+                time = datetime.fromisoformat(t_str[:26])
+            else:
+                time = datetime.fromisoformat(row[3])
+        else:
+            time = row[3]
+        return event, isimage, isdeleted, time
 
     @staticmethod
     def _get_place(cur, img_id, filename, places):
